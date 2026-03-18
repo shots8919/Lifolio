@@ -17,8 +17,10 @@
   --miyu-bd:  #f9a8d4;
   --success:  #059669;
   --danger:   #dc2626;
-  --nav-bg:   #0c0e12;
-  --nav-txt:  #e8eaed;
+  --nav-bg:    #0c0e12;
+  --nav-txt:   #e8eaed;
+  --nav-muted: #9ca3af;
+  --accent:    #60a5fa;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -30,3 +32,12 @@ body {
   font-size: 14px;
   line-height: 1.6;
 }
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-8px); }
+  40%       { transform: translateX(8px); }
+  60%       { transform: translateX(-5px); }
+  80%       { transform: translateX(5px); }
+}
+.animate-shake { animation: shake 0.4s ease; }

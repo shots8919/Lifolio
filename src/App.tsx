@@ -5,6 +5,7 @@ import AppLayout from '@/components/layout/AppLayout'
 import DashboardPage from '@/pages/DashboardPage'
 import CalculatePage from '@/features/account/CalculatePage'
 import DataPage from '@/features/account/DataPage'
+import SettingsPage from '@/pages/SettingsPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated)
@@ -27,6 +28,7 @@ export default function App() {
           <Route index element={<DashboardPage />} />
           <Route path="account/calculate" element={<CalculatePage />} />
           <Route path="account/data" element={<DataPage />} />
+          <Route path="settings" element={<SettingsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

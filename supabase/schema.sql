@@ -9,12 +9,12 @@ create table if not exists app_settings (
 
 alter table app_settings enable row level security;
 create policy "allow_anon_select" on app_settings for select using (true);
+create policy "allow_anon_update" on app_settings for update using (true) with check (true);
 
--- 初期パスワード: REMOVED
--- ※ ハッシュ = REMOVED
-insert into app_settings (key, value)
-values ('auth_hash', 'REMOVED')
-on conflict (key) do nothing;
+-- ※ 初期データは手動でSupabaseのSQL Editorから登録してください:
+-- insert into app_settings (key, value)
+-- values ('auth_hash', sha256('ユーザー名:パスワード')の結果)
+-- on conflict (key) do nothing;
 
 
 -- 2. 共有口座ユーザー設定テーブル（控除設定・目標残高）

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { AccountRecord } from '@/types'
+import RecordDetailModal from '@/components/ui/RecordDetailModal'
 
 const fmt = (n: number) => Number(n).toLocaleString('ja-JP')
 const fmtMonth = (ym: string) => {
@@ -11,6 +12,7 @@ const fmtMonth = (ym: string) => {
 export default function DataPage() {
   const [records, setRecords] = useState<AccountRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [detailRecord, setDetailRecord] = useState<AccountRecord | null>(null)
 
   useEffect(() => {
     void loadRecords()
@@ -50,7 +52,9 @@ export default function DataPage() {
     const a = document.createElement('a')
     a.href = url
     a.download = `lifolio_account_${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(a)
     a.click()
+    document.body.removeChild(a)
     URL.revokeObjectURL(url)
   }
 
@@ -123,13 +127,22 @@ export default function DataPage() {
                     <td className={`${tdClass} font-mono text-right font-semibold`} style={{ color: 'var(--shota)' }}>{fmt(r.trans_shota)}</td>
                     <td className={`${tdClass} font-mono text-right font-semibold`} style={{ color: 'var(--miyu)' }}>{fmt(r.trans_miyu)}</td>
                     <td className={tdClass}>
-                      <button
-                        onClick={() => r.id && void deleteRecord(r.id, r.month)}
-                        className="text-xs px-2.5 py-1 rounded-lg transition-colors hover:opacity-70"
-                        style={{ background: 'var(--subtle)', color: 'var(--muted)' }}
-                      >
-                        削除
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => setDetailRecord(r)}
+                          className="text-xs px-2.5 py-1 rounded-lg transition-colors"
+                          style={{ background: 'var(--shota-bg)', color: 'var(--shota)', border: '1px solid var(--shota-bd)' }}
+                        >
+                          詳細
+                        </button>
+                        <button
+                          onClick={() => r.id && void deleteRecord(r.id, r.month)}
+                          className="text-xs px-2.5 py-1 rounded-lg transition-colors hover:opacity-70"
+                          style={{ background: 'var(--subtle)', color: 'var(--muted)' }}
+                        >
+                          削除
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -138,6 +151,8 @@ export default function DataPage() {
           </div>
         )}
       </div>
+
+      <RecordDetailModal record={detailRecord} onClose={() => setDetailRecord(null)} />
     </div>
   )
 }

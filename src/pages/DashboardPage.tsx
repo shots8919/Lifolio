@@ -3,9 +3,17 @@ import { useNavigate } from 'react-router-dom'
 const notices = [
   {
     id: 1,
-    title: 'Lifolio へようこそ',
-    body: '家庭管理システム Lifolio が起動しました。左メニューから各機能をご利用ください。',
+    title: '🎉 Lifolio v1.0.0 リリース',
+    body: '家庭管理システム Lifolio の初回リリースです。まずは共有口座管理からご利用ください。',
     date: '2026-03-18',
+    tag: 'NEW',
+  },
+  {
+    id: 2,
+    title: 'from 作成者',
+    body: '遊びで家庭の管理システム作ってみた。無料の範囲で暇な時に機能追加してみようと思うからお楽しみに 🐱',
+    date: '2026-03-18',
+    tag: 'MSG',
   },
 ]
 
@@ -21,9 +29,16 @@ const features = [
     ready: true,
     icon: (
       <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-        <rect x="1.5" y="5" width="19" height="13" rx="2.5" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M1.5 9.5h19" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M6 14h3M14 14h2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        {/* 財布本体 */}
+        <rect x="2" y="6" width="18" height="13" rx="2.5" stroke="currentColor" strokeWidth="1.5" />
+        {/* 財布フラップ */}
+        <path d="M2 10h18" stroke="currentColor" strokeWidth="1.5" />
+        {/* コインポケット */}
+        <rect x="13" y="12.5" width="5" height="4" rx="1" stroke="currentColor" strokeWidth="1.3" />
+        {/* コイン */}
+        <circle cx="15.5" cy="14.5" r="1" fill="currentColor" />
+        {/* ストラップ */}
+        <path d="M6 6V4.5A2.5 2.5 0 0 1 8.5 2h5A2.5 2.5 0 0 1 16 4.5V6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       </svg>
     ),
   },
@@ -38,7 +53,18 @@ const features = [
     ready: false,
     icon: (
       <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-        <path d="M7 3v6a4 4 0 008 0V3M11 12v7M8 19h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        {/* カレンダー本体 */}
+        <rect x="2" y="4" width="14" height="13" rx="2" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M2 8h14" stroke="currentColor" strokeWidth="1.5" />
+        {/* ピン */}
+        <path d="M6 2v3M12 2v3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        {/* グリッド点 */}
+        <circle cx="6" cy="11.5" r="1" fill="currentColor" />
+        <circle cx="9" cy="11.5" r="1" fill="currentColor" />
+        <circle cx="6" cy="14.5" r="1" fill="currentColor" />
+        {/* フォーク */}
+        <path d="M18 4v4M16.5 4v2.5a1.5 1.5 0 0 0 3 0V4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+        <path d="M18 8v9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
       </svg>
     ),
   },
@@ -74,10 +100,26 @@ export default function DashboardPage() {
                   className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0"
                   style={{ background: 'var(--shota)' }}
                 />
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
+                    {n.tag === 'NEW' && (
+                      <span
+                        className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                        style={{ background: '#dbeafe', color: '#1d4ed8' }}
+                      >
+                        NEW
+                      </span>
+                    )}
+                    {n.tag === 'MSG' && (
+                      <span
+                        className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                        style={{ background: 'var(--miyu-bg)', color: 'var(--miyu)' }}
+                      >
+                        MSG
+                      </span>
+                    )}
                     <span className="text-sm font-medium" style={{ color: 'var(--text)' }}>{n.title}</span>
-                    <span className="text-xs" style={{ color: 'var(--muted)' }}>{n.date}</span>
+                    <span className="text-xs ml-auto" style={{ color: 'var(--muted)' }}>{n.date}</span>
                   </div>
                   <p className="text-sm mt-0.5" style={{ color: 'var(--muted)' }}>{n.body}</p>
                 </div>
@@ -99,11 +141,13 @@ export default function DashboardPage() {
           {features.map(f => (
             <div
               key={f.id}
-              className="rounded-xl p-5 transition-all"
+              onClick={() => f.ready && navigate(f.href)}
+              className={`rounded-xl p-5 transition-all ${f.ready ? 'hover:shadow-md hover:-translate-y-0.5' : 'cursor-not-allowed'}`}
               style={{
                 background: 'var(--surface)',
                 border: `1px solid ${f.ready ? f.colorBd : 'var(--border)'}`,
                 opacity: f.ready ? 1 : 0.55,
+                cursor: f.ready ? 'pointer' : 'not-allowed',
               }}
             >
               <div className="flex items-start justify-between gap-3">
@@ -124,18 +168,7 @@ export default function DashboardPage() {
               </div>
               <h3 className="text-sm font-semibold mt-3" style={{ color: 'var(--text)' }}>{f.title}</h3>
               <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>{f.description}</p>
-              {f.ready && (
-                <button
-                  onClick={() => navigate(f.href)}
-                  className="inline-flex items-center gap-1 text-xs font-medium mt-3 transition-opacity hover:opacity-70"
-                  style={{ color: f.color }}
-                >
-                  開く
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path d="M2.5 6h7M7 3.5L9.5 6 7 8.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-              )}
+
             </div>
           ))}
         </div>

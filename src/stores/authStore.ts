@@ -3,7 +3,8 @@ import { persist } from 'zustand/middleware'
 
 interface AuthState {
   isAuthenticated: boolean
-  login: () => void
+  username: string
+  login: (username: string) => void
   logout: () => void
 }
 
@@ -11,8 +12,9 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       isAuthenticated: false,
-      login: () => set({ isAuthenticated: true }),
-      logout: () => set({ isAuthenticated: false }),
+      username: '',
+      login: (username) => set({ isAuthenticated: true, username }),
+      logout: () => set({ isAuthenticated: false, username: '' }),
     }),
     { name: 'lifolio_auth' }
   )

@@ -49,6 +49,18 @@ const defaultSettings = (): SettingsState => ({
   targetBalance: '', shota: defaultPerson(), miyu: defaultPerson(),
 })
 
+// ─── コンポーネント外定数 ─────────────────────────────
+const COLORS = {
+  shota: { text: 'var(--shota)', bg: 'var(--shota-bg)', bd: 'var(--shota-bd)' },
+  miyu:  { text: 'var(--miyu)',  bg: 'var(--miyu-bg)',  bd: 'var(--miyu-bd)'  },
+}
+const CARD_STYLE = { background: 'var(--surface)', border: '1px solid var(--border)' }
+const inputStyle = (disabled?: boolean) => ({
+  border: '1px solid var(--border)',
+  color: disabled ? 'var(--muted)' : 'var(--text)',
+  background: disabled ? 'var(--subtle)' : 'var(--surface)',
+})
+
 // ─── コンポーネント ───────────────────────────────────
 export default function CalculatePage() {
   const [settings, setSettings] = useState<SettingsState>(defaultSettings())
@@ -216,18 +228,10 @@ export default function CalculatePage() {
   const removeOther = (person: 'shota' | 'miyu', idx: number) =>
     setSettings(s => ({ ...s, [person]: { ...s[person], others: s[person].others.filter((_, i) => i !== idx) } }))
 
-  const pc = {
-    shota: { text: 'var(--shota)', bg: 'var(--shota-bg)', bd: 'var(--shota-bd)' },
-    miyu: { text: 'var(--miyu)', bg: 'var(--miyu-bg)', bd: 'var(--miyu-bd)' },
-  }
+  const pc = COLORS
 
   // ─── 共通スタイル ───────────────────────────────────
-  const cardStyle = { background: 'var(--surface)', border: '1px solid var(--border)' }
-  const inputStyle = (disabled?: boolean) => ({
-    border: '1px solid var(--border)',
-    color: disabled ? 'var(--muted)' : 'var(--text)',
-    background: disabled ? 'var(--subtle)' : 'var(--surface)',
-  })
+  const cardStyle = CARD_STYLE
 
   // ─── JSX ────────────────────────────────────────────
   return (

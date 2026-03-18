@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { sha256 } from '@/lib/crypto'
 import { useAuthStore } from '@/stores/authStore'
+import NekoIcon from '@/components/ui/NekoIcon'
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
@@ -41,7 +42,7 @@ export default function LoginPage() {
 
       const inputHash = await sha256(`${username}:${password}`)
       if (inputHash === data.value) {
-        login()
+        login(username)
         navigate('/', { replace: true })
       } else {
         setError('ユーザー名またはパスワードが正しくありません')
@@ -76,9 +77,7 @@ export default function LoginPage() {
             className="w-12 h-12 rounded-xl flex items-center justify-center mb-3"
             style={{ background: 'var(--shota)' }}
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <path d="M4 18l4-6 4 4 4-8 4 10" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <NekoIcon size={26} />
           </div>
           <h1 className="text-xl font-bold tracking-tight" style={{ color: 'var(--text)' }}>
             Lifo<span style={{ color: 'var(--shota)' }}>lio</span>
@@ -134,16 +133,6 @@ export default function LoginPage() {
         </form>
       </div>
 
-      <style>{`
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          20% { transform: translateX(-8px); }
-          40% { transform: translateX(8px); }
-          60% { transform: translateX(-5px); }
-          80% { transform: translateX(5px); }
-        }
-        .animate-shake { animation: shake 0.4s ease; }
-      `}</style>
     </div>
   )
 }
