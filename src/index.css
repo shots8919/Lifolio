@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg:       #f4f5f7;
+  --surface:  #ffffff;
+  --border:   #e2e4ea;
+  --text:     #0f1117;
+  --muted:    #6c7188;
+  --subtle:   #f0f1f4;
+  --shota:    #2563eb;
+  --shota-bg: #eff4ff;
+  --shota-bd: #bfcffd;
+  --miyu:     #db2777;
+  --miyu-bg:  #fff0f7;
+  --miyu-bd:  #f9a8d4;
+  --success:  #059669;
+  --danger:   #dc2626;
+  --nav-bg:   #0c0e12;
+  --nav-txt:  #e8eaed;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  font-family: 'Inter', 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+}
