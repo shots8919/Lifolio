@@ -46,11 +46,11 @@ const features = [
     id: 'meal',
     title: '献立管理',
     description: 'AI提案付きの週間献立計画・レシピ管理',
-    href: '#',
+    href: '/meal/plan',
     color: 'var(--miyu)',
     colorBg: 'var(--miyu-bg)',
     colorBd: 'var(--miyu-bd)',
-    ready: false,
+    ready: true,
     icon: (
       <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
         {/* カレンダー本体 */}

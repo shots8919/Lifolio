@@ -12,6 +12,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const navigate = useNavigate()
   const logout = useAuthStore(s => s.logout)
   const [accountOpen, setAccountOpen] = useState(true)
+  const [mealOpen, setMealOpen] = useState(true)
 
   const handleLogout = () => {
     if (window.confirm('ログアウトしますか？')) {
@@ -111,31 +112,52 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           )}
         </div>
 
-        {/* 献立管理（準備中） */}
-        <button
-          disabled
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[13px] opacity-40 cursor-not-allowed text-[var(--nav-muted)]"
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            {/* カレンダー */}
-            <rect x="1.5" y="3" width="10" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
-            <path d="M1.5 6h10" stroke="currentColor" strokeWidth="1.4" />
-            <path d="M4.5 1.5v2M8.5 1.5v2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-            <circle cx="4.5" cy="8.5" r="0.8" fill="currentColor" />
-            <circle cx="7" cy="8.5" r="0.8" fill="currentColor" />
-            <circle cx="4.5" cy="11" r="0.8" fill="currentColor" />
-            {/* フォーク */}
-            <path d="M14 3v3M12.5 3v2a1.5 1.5 0 0 0 3 0V3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-            <path d="M14 6v7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-          </svg>
-          献立管理
-          <span
-            className="ml-auto text-[10px] rounded px-1.5 py-0.5"
-            style={{ background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.4)' }}
+        {/* 献立管理 */}
+        <div>
+          <button
+            className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-[13px] transition-colors text-[var(--nav-muted)] hover:text-white hover:bg-white/5"
+            onClick={() => setMealOpen(o => !o)}
           >
-            準備中
-          </span>
-        </button>
+            <span className="flex items-center gap-2">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                {/* カレンダー */}
+                <rect x="1.5" y="3" width="10" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
+                <path d="M1.5 6h10" stroke="currentColor" strokeWidth="1.4" />
+                <path d="M4.5 1.5v2M8.5 1.5v2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                <circle cx="4.5" cy="8.5" r="0.8" fill="currentColor" />
+                <circle cx="7" cy="8.5" r="0.8" fill="currentColor" />
+                <circle cx="4.5" cy="11" r="0.8" fill="currentColor" />
+                {/* フォーク */}
+                <path d="M14 3v3M12.5 3v2a1.5 1.5 0 0 0 3 0V3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                <path d="M14 6v7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+              </svg>
+              献立管理
+            </span>
+            <svg
+              width="14" height="14" viewBox="0 0 14 14" fill="none"
+              className={`transition-transform duration-200 ${mealOpen ? 'rotate-180' : ''}`}
+            >
+              <path d="M3.5 5l3.5 4 3.5-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+          </button>
+
+          {mealOpen && (
+            <div
+              className="ml-5 mt-0.5 border-l pl-3 space-y-0.5 pb-1"
+              style={{ borderColor: 'rgba(255,255,255,0.08)' }}
+            >
+              <NavLink to="/meal/plan" className={subLinkClass} onClick={onClose}>
+                献立計画
+              </NavLink>
+              <NavLink to="/meal/recipes" className={subLinkClass} onClick={onClose}>
+                レシピ
+              </NavLink>
+              <NavLink to="/meal/preferences" className={subLinkClass} onClick={onClose}>
+                好み設定
+              </NavLink>
+            </div>
+          )}
+        </div>
       </nav>
 
       {/* 設定 + ログアウト */}
@@ -168,3 +190,4 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     </aside>
   )
 }
+
