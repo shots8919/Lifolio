@@ -109,3 +109,17 @@ create table if not exists meal_plans (
 alter table meal_plans enable row level security;
 create policy "allow_anon_all_meal_plans" on meal_plans
   using (true) with check (true);
+
+
+-- 7. AI提案保存テーブル（最新1件を保持）
+create table if not exists ai_proposals (
+  id            uuid        primary key default gen_random_uuid(),
+  created_at    timestamptz default now(),
+  summary       text        not null default '',
+  meals         jsonb       not null default '[]',
+  shopping_list jsonb       not null default '[]'
+);
+
+alter table ai_proposals enable row level security;
+create policy "allow_anon_all_ai_proposals" on ai_proposals
+  using (true) with check (true);

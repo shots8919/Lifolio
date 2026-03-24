@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import type { MealPreference, MealRecipe, MealPlan } from '@/types/meal'
-import { preferencesApi, recipesApi, plansApi, geminiKeyApi } from '@/lib/mealApi'
+import type { MealPreference, MealRecipe, MealPlan, SavedAiProposal, AiProposal } from '@/types/meal'
+import { preferencesApi, recipesApi, plansApi, geminiKeyApi, aiProposalApi } from '@/lib/mealApi'
 
 interface MealState {
   preferences: MealPreference[]
@@ -9,6 +9,7 @@ interface MealState {
   recentPlans: MealPlan[]    // 直近2週間（AI提案用）
   geminiApiKey: string | null
   geminiModelName: string | null
+  savedProposal: SavedAiProposal | null  // Supabaseに保存した最新AI提案
   initialized: boolean
   loading: boolean
 
@@ -29,6 +30,7 @@ interface MealState {
 
   saveGeminiKey: (key: string) => Promise<void>
   saveGeminiModelName: (modelName: string) => Promise<void>
+  saveAiProposal: (proposal: AiProposal) => Promise<void>
 }
 
 export const useMealStore = create<MealState>()((set, get) => ({
@@ -38,6 +40,7 @@ export const useMealStore = create<MealState>()((set, get) => ({
   recentPlans: [],
   geminiApiKey: null,
   geminiModelName: null,
+  savedProposal: null,
   initialized: false,
   loading: false,
 
@@ -45,15 +48,16 @@ export const useMealStore = create<MealState>()((set, get) => ({
     if (get().initialized) return
     set({ loading: true })
     try {
-      const [preferences, recipes, recentPlans, geminiApiKey, geminiModelName] = await Promise.all([
+      const [preferences, recipes, recentPlans, geminiApiKey, geminiModelName, savedProposal] = await Promise.all([
         preferencesApi.getAll(),
         recipesApi.getAll(),
         plansApi.getRecent(14),
         geminiKeyApi.get(),
         geminiKeyApi.getModelName(),
+        aiProposalApi.getLatest(),
       ])
       await plansApi.deleteOld()
-      set({ preferences, recipes, recentPlans, geminiApiKey, geminiModelName, initialized: true })
+      set({ preferences, recipes, recentPlans, geminiApiKey, geminiModelName, savedProposal, initialized: true })
     } finally {
       set({ loading: false })
     }
@@ -120,5 +124,14 @@ export const useMealStore = create<MealState>()((set, get) => ({
   saveGeminiModelName: async (modelName) => {
     await geminiKeyApi.saveModelName(modelName)
     set({ geminiModelName: modelName })
+  },
+
+  saveAiProposal: async (proposal) => {
+    const saved = await aiProposalApi.save({
+      summary: proposal.summary,
+      meals: proposal.meals,
+      shopping_list: proposal.shopping_list,
+    })
+    set({ savedProposal: saved })
   },
 }))

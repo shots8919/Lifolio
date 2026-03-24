@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { MealPreference, MealRecipe, MealPlan } from '@/types/meal'
+import type { MealPreference, MealRecipe, MealPlan, SavedAiProposal } from '@/types/meal'
 
 // ─── 好み管理 ────────────────────────────────────────────────────
 export const preferencesApi = {
@@ -126,6 +126,35 @@ export const plansApi = {
       .delete()
       .lt('date', cutoff.toISOString().split('T')[0])
     if (error) throw error
+  },
+}
+
+// ─── AI提案保存 ─────────────────────────────────────────────────
+export const aiProposalApi = {
+  async getLatest(): Promise<SavedAiProposal | null> {
+    const { data } = await supabase
+      .from('ai_proposals')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (!data) return null
+    return data as SavedAiProposal
+  },
+
+  async save(
+    proposal: Pick<SavedAiProposal, 'summary' | 'meals' | 'shopping_list'>,
+  ): Promise<SavedAiProposal> {
+    // 新規挿入
+    const { data, error } = await supabase
+      .from('ai_proposals')
+      .insert(proposal)
+      .select()
+      .single()
+    if (error) throw error
+    // 旧提案を削除（最新1件のみ保持）
+    await supabase.from('ai_proposals').delete().neq('id', data.id)
+    return data as SavedAiProposal
   },
 }
 

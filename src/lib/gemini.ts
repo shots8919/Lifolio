@@ -115,7 +115,7 @@ function buildSystemPrompt(
   recentPlans: MealPlan[],
   recipes: MealRecipe[],
 ): string {
-  return `献立提案AI。ShotaとMiyu夫婦の夕食（必要に応じ昼食）を提案する。
+  return `献立提案AI。ShotaとMiyu夫婦の昼食・夕食を提案する。
 
 ${buildPreferencesText(preferences)}
 
@@ -124,9 +124,12 @@ ${buildPreferencesText(preferences)}
 【直近の献立（重複禁止）】${buildRecentPlansText(recentPlans)}
 
 ルール:
-- 苦手食材NG、重複NG、好物優先、ジャンルバランスを保つ
-- 【夕食】必ず主菜（肉・魚・卵など）を1品含めること。さらにもう1品（副菜またはスープ）を推奨する
-- 【昼食】時間がないことが多いため、パスタ・丼もの・炒飯・麺類・サンドイッチなど10〜20分で作れる簡単な一品料理を提案すること。副菜は不要
+- 苦手食材NG、直近と重複NG
+- 好物は全体の30%以下を目安にし、残りはバリエーション豊富な料理を提案する（好物ばかりにしない）
+- ジャンル（和食・洋食・中華・アジア）をバランスよくばらけさせる
+- 【夕食 dinner】必ず主菜（肉・魚・卵など）を1品含めること。さらにもう1品（副菜またはスープ）を推奨する
+- 【昼食 lunch】パスタ・丼もの・炒飯・麺類など10〜20分で作れる簡単な一品料理。副菜は不要
+- 各料理に詳細な調理手順（steps）を必ず記載する
 必ず下記JSON形式のみで回答。
 \`\`\`json
 {
@@ -134,11 +137,12 @@ ${buildPreferencesText(preferences)}
   "meals": [
     {
       "date": "YYYY-MM-DD",
-      "meal_type": "dinner",
+      "meal_type": "dinner または lunch",
       "dish_name": "料理名",
       "genre": "和食",
       "type": "主菜",
       "ingredients": "食材（カンマ区切り）",
+      "steps": "1. 〜\n2. 〜\n3. 〜",
       "duration_min": 30,
       "difficulty": 2,
       "note": "ポイント"

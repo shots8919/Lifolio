@@ -62,12 +62,21 @@ export interface AiProposedMeal {
   genre: string
   type: string
   ingredients: string
+  steps?: string          // 調理手順（詳細）
   duration_min: number | null
   difficulty: number | null
   note: string
 }
 
 export interface AiProposal {
+  summary: string
+  meals: AiProposedMeal[]
+  shopping_list: { item: string; amount: string; category: string }[]
+}
+
+export interface SavedAiProposal {
+  id: string
+  created_at: string
   summary: string
   meals: AiProposedMeal[]
   shopping_list: { item: string; amount: string; category: string }[]

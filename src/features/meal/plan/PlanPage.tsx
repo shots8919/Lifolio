@@ -184,18 +184,26 @@ interface MealSlotProps {
 }
 
 function MealSlot({ plan, date, mealType, onEdit }: MealSlotProps) {
-  const label = mealType === 'dinner' ? '夜' : '昼'
+  const isLunch = mealType === 'lunch'
   const name = plan?.recipe?.name ?? plan?.free_text ?? null
 
   if (!name) {
     return (
       <button
         onClick={() => onEdit(date, mealType)}
-        className="w-full text-left px-2 py-1.5 rounded-lg border-dashed border text-xs transition-colors hover:bg-black/3"
-        style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}
+        className="w-full text-center rounded-lg border-dashed border transition-colors hover:bg-black/5 active:bg-black/10"
+        style={{
+          borderColor: 'var(--border)',
+          color: 'var(--muted)',
+          minHeight: 32,
+          padding: '4px 2px',
+          fontSize: 13,
+        }}
       >
-        <span className="text-[10px] mr-1">{label}</span>
-        <span>＋</span>
+        <span className="text-[10px] block" style={{ color: isLunch ? 'var(--shota)' : 'var(--miyu)', opacity: 0.7 }}>
+          {isLunch ? '☀️昼' : '🌙夜'}
+        </span>
+        <span style={{ fontSize: 16, lineHeight: 1 }}>＋</span>
       </button>
     )
   }
@@ -203,15 +211,29 @@ function MealSlot({ plan, date, mealType, onEdit }: MealSlotProps) {
   return (
     <button
       onClick={() => onEdit(date, mealType)}
-      className="w-full text-left px-2 py-1.5 rounded-lg text-xs transition-colors hover:opacity-80"
+      className="w-full text-left rounded-lg transition-opacity hover:opacity-80 active:opacity-60"
       style={{
         background: plan?.ai_proposal ? 'var(--miyu-bg)' : 'var(--shota-bg)',
         border: `1px solid ${plan?.ai_proposal ? 'var(--miyu-bd)' : 'var(--shota-bd)'}`,
-        color: plan?.ai_proposal ? 'var(--miyu)' : 'var(--shota)',
+        minHeight: 32,
+        padding: '3px 4px',
       }}
     >
-      <span className="text-[10px] opacity-70 mr-1">{label}</span>
-      <span className="font-medium truncate block leading-snug">{name}</span>
+      <span className="text-[9px] block" style={{ color: isLunch ? 'var(--shota)' : 'var(--miyu)', opacity: 0.8 }}>
+        {isLunch ? '☀️昼' : '🌙夜'}
+      </span>
+      <span
+        className="block text-[11px] font-medium leading-tight"
+        style={{
+          color: plan?.ai_proposal ? 'var(--miyu)' : 'var(--shota)',
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+        }}
+      >
+        {name}
+      </span>
     </button>
   )
 }
@@ -227,9 +249,6 @@ export default function PlanPage() {
 
   const [weekOffset, setWeekOffset] = useState(0)
   const [showAi, setShowAi] = useState(false)
-  // 昼枠を開いている日付のSet
-  const [lunchDates, setLunchDates] = useState<Set<string>>(new Set())
-  // スロット編集モーダル
   const [editTarget, setEditTarget] = useState<{ date: string; mealType: MealSlotType } | null>(null)
 
   const monday = getMonday(addDays(new Date(), weekOffset * 7))
@@ -245,18 +264,8 @@ export default function PlanPage() {
 
   useEffect(() => {
     loadWeekPlans(weekDates[0], sunday)
-
-    // 昼枠: 既存プランがある日は自動で開く
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekOffset])
-
-  useEffect(() => {
-    // ロード後に昼の献立がある日を自動展開
-    const lunchPlanned = new Set(
-      weekPlans.filter(p => p.meal_type === 'lunch').map(p => p.date),
-    )
-    setLunchDates(prev => new Set([...prev, ...lunchPlanned]))
-  }, [weekPlans])
 
   const getPlan = useCallback(
     (date: string, mealType: MealSlotType) =>
@@ -264,20 +273,7 @@ export default function PlanPage() {
     [weekPlans],
   )
 
-  const toggleLunch = (date: string) => {
-    setLunchDates(prev => {
-      const next = new Set(prev)
-      if (next.has(date)) next.delete(date)
-      else next.add(date)
-      return next
-    })
-  }
-
-  const handleSaveMeal = async (
-    date: string,
-    mealType: MealSlotType,
-    dishName: string,
-  ) => {
+  const handleSaveMeal = async (date: string, mealType: MealSlotType, dishName: string) => {
     await upsertPlan({ date, meal_type: mealType, recipe_id: null, free_text: dishName, ai_proposal: true })
   }
 
@@ -322,21 +318,21 @@ export default function PlanPage() {
       <div className="flex items-center gap-2">
         <button
           onClick={() => setWeekOffset(o => o - 1)}
-          className="h-8 w-8 rounded-lg flex items-center justify-center transition-colors hover:bg-black/5"
+          className="h-9 w-9 rounded-xl flex items-center justify-center transition-colors hover:bg-black/5"
           style={{ border: '1px solid var(--border)', color: 'var(--muted)' }}
         >
           ‹
         </button>
         <button
           onClick={() => setWeekOffset(0)}
-          className="h-8 px-3 rounded-lg text-xs transition-colors hover:bg-black/5"
+          className="flex-1 h-9 rounded-xl text-xs font-medium transition-colors hover:bg-black/5"
           style={{ border: '1px solid var(--border)', color: weekOffset === 0 ? 'var(--shota)' : 'var(--muted)' }}
         >
           今週
         </button>
         <button
           onClick={() => setWeekOffset(o => o + 1)}
-          className="h-8 w-8 rounded-lg flex items-center justify-center transition-colors hover:bg-black/5"
+          className="h-9 w-9 rounded-xl flex items-center justify-center transition-colors hover:bg-black/5"
           style={{ border: '1px solid var(--border)', color: 'var(--muted)' }}
         >
           ›
@@ -346,90 +342,89 @@ export default function PlanPage() {
       {/* AI提案パネル */}
       {showAi && <AiProposalPanel onSaveMeal={handleSaveMeal} />}
 
-      {/* 週間カレンダー */}
-      <div
-        className="rounded-xl overflow-hidden"
-        style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
-      >
-        {/* 曜日ヘッダー */}
-        <div className="grid grid-cols-7" style={{ borderBottom: '1px solid var(--border)' }}>
-          {weekDates.map(date => {
-            const d = new Date(date + 'T00:00:00')
-            const day = d.getDay()
-            return (
-              <div
-                key={date}
-                className="py-2 text-center text-[11px] font-semibold"
-                style={{
-                  color: isToday(date) ? 'var(--shota)' : day === 0 ? '#ef4444' : day === 6 ? '#3b82f6' : 'var(--muted)',
-                  background: isToday(date) ? 'var(--shota-bg)' : 'transparent',
-                }}
-              >
-                {WEEKDAY_JP[day]}
-                <br />
-                <span className="font-normal text-[10px]">{d.getDate()}</span>
-              </div>
-            )
-          })}
-        </div>
-
-        {/* 献立スロット */}
-        <div className="grid grid-cols-7">
-          {weekDates.map(date => (
-            <div
-              key={date}
-              className="p-1.5 space-y-1"
-              style={{
-                borderRight: '1px solid var(--border)',
-                background: isToday(date) ? 'var(--shota-bg)' : 'transparent',
-              }}
-            >
-              {/* 夜スロット */}
-              <MealSlot
-                plan={getPlan(date, 'dinner')}
-                date={date}
-                mealType="dinner"
-                onEdit={handleEdit}
-              />
-
-              {/* 昼スロット（展開時） */}
-              {lunchDates.has(date) && (
-                <MealSlot
-                  plan={getPlan(date, 'lunch')}
-                  date={date}
-                  mealType="lunch"
-                  onEdit={handleEdit}
-                />
-              )}
-
-              {/* 昼トグル */}
-              <button
-                onClick={() => toggleLunch(date)}
-                className="w-full text-[10px] text-center transition-colors hover:opacity-70 py-0.5"
-                style={{ color: 'var(--muted)' }}
-              >
-                {lunchDates.has(date) ? '昼−' : '昼＋'}
-              </button>
+      {/* 週間カレンダー（横スクロール対応） */}
+      <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <div style={{ minWidth: '420px' }}>
+          <div
+            className="rounded-xl overflow-hidden"
+            style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+          >
+            {/* 曜日ヘッダー */}
+            <div className="grid grid-cols-7" style={{ borderBottom: '1px solid var(--border)' }}>
+              {weekDates.map(date => {
+                const d = new Date(date + 'T00:00:00')
+                const day = d.getDay()
+                return (
+                  <div
+                    key={date}
+                    className="py-2 text-center"
+                    style={{
+                      background: isToday(date) ? 'var(--shota-bg)' : 'transparent',
+                      borderRight: '1px solid var(--border)',
+                    }}
+                  >
+                    <div
+                      className="text-[11px] font-bold"
+                      style={{ color: isToday(date) ? 'var(--shota)' : day === 0 ? '#ef4444' : day === 6 ? '#3b82f6' : 'var(--muted)' }}
+                    >
+                      {WEEKDAY_JP[day]}
+                    </div>
+                    <div
+                      className="text-[12px] font-semibold mt-0.5"
+                      style={{
+                        width: 22, height: 22, lineHeight: '22px',
+                        borderRadius: '50%',
+                        background: isToday(date) ? 'var(--shota)' : 'transparent',
+                        color: isToday(date) ? 'white' : 'var(--text)',
+                        margin: '2px auto 0',
+                        textAlign: 'center',
+                      }}
+                    >
+                      {d.getDate()}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-          ))}
+
+            {/* 献立スロット */}
+            <div className="grid grid-cols-7">
+              {weekDates.map(date => (
+                <div
+                  key={date}
+                  className="p-1 space-y-1"
+                  style={{
+                    borderRight: '1px solid var(--border)',
+                    background: isToday(date) ? 'var(--shota-bg)' : 'transparent',
+                    minHeight: 80,
+                  }}
+                >
+                  {/* 夜スロット */}
+                  <MealSlot plan={getPlan(date, 'dinner')} date={date} mealType="dinner" onEdit={handleEdit} />
+                  {/* 昼スロット（常時表示） */}
+                  <MealSlot plan={getPlan(date, 'lunch')} date={date} mealType="lunch" onEdit={handleEdit} />
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
       {/* 凡例 */}
-      <div className="flex gap-3 text-[10px]" style={{ color: 'var(--muted)' }}>
-        <span className="flex items-center gap-1">
-          <span
-            className="inline-block w-2.5 h-2.5 rounded"
-            style={{ background: 'var(--shota-bg)', border: '1px solid var(--shota-bd)' }}
-          />
+      <div className="flex gap-4 text-[11px]" style={{ color: 'var(--muted)' }}>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 rounded" style={{ background: 'var(--shota-bg)', border: '1px solid var(--shota-bd)' }} />
           手動入力
         </span>
-        <span className="flex items-center gap-1">
-          <span
-            className="inline-block w-2.5 h-2.5 rounded"
-            style={{ background: 'var(--miyu-bg)', border: '1px solid var(--miyu-bd)' }}
-          />
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 rounded" style={{ background: 'var(--miyu-bg)', border: '1px solid var(--miyu-bd)' }} />
           AI提案
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="text-base leading-none">☀️</span> 昼
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="text-base leading-none">🌙</span> 夜
         </span>
       </div>
 
