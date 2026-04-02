@@ -94,21 +94,30 @@ create policy "allow_anon_all_meal_recipes" on meal_recipes
   using (true) with check (true);
 
 
--- 6. 献立計画テーブル（日付×食事種別でユニーク）
+-- 6. 献立計画テーブル
+-- dish_role: 'single'=昼食1品, 'main'=夕食・主食主菜, 'side'=副菜, 'soup'=汁物
 create table if not exists meal_plans (
   id          uuid        primary key default gen_random_uuid(),
   created_at  timestamptz default now(),
   date        date        not null,
   meal_type   text        not null check (meal_type in ('lunch', 'dinner')),
+  dish_role   text        not null default 'single' check (dish_role in ('single', 'main', 'side', 'soup')),
   recipe_id   uuid        references meal_recipes(id) on delete set null,
   free_text   text,
   ai_proposal boolean     not null default false,
-  unique (date, meal_type)
+  unique (date, meal_type, dish_role)
 );
 
 alter table meal_plans enable row level security;
 create policy "allow_anon_all_meal_plans" on meal_plans
   using (true) with check (true);
+
+-- ※ 既存テーブルへの移行SQL（既にテーブルがある場合はSupabase SQL Editorで実行）:
+-- alter table meal_plans add column if not exists dish_role text not null default 'single'
+--   check (dish_role in ('single', 'main', 'side', 'soup'));
+-- alter table meal_plans drop constraint if exists meal_plans_date_meal_type_key;
+-- alter table meal_plans add constraint meal_plans_date_meal_type_role_key
+--   unique (date, meal_type, dish_role);
 
 
 -- 7. AI提案保存テーブル（最新1件を保持）
@@ -122,4 +131,18 @@ create table if not exists ai_proposals (
 
 alter table ai_proposals enable row level security;
 create policy "allow_anon_all_ai_proposals" on ai_proposals
+  using (true) with check (true);
+
+
+-- 8. 買い物リスト保存テーブル
+create table if not exists meal_shopping_lists (
+  id         uuid        primary key default gen_random_uuid(),
+  created_at timestamptz default now(),
+  date_from  text        not null,
+  date_to    text        not null,
+  items      jsonb       not null default '[]'
+);
+
+alter table meal_shopping_lists enable row level security;
+create policy "allow_anon_all_shopping_lists" on meal_shopping_lists
   using (true) with check (true);

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import type { MealPreference, MealRecipe, MealPlan, SavedAiProposal, AiProposal } from '@/types/meal'
-import { preferencesApi, recipesApi, plansApi, geminiKeyApi, aiProposalApi } from '@/lib/mealApi'
+import type { MealPreference, MealRecipe, MealPlan, SavedAiProposal, AiProposal, SavedShoppingList, ShoppingItem } from '@/types/meal'
+import { preferencesApi, recipesApi, plansApi, geminiKeyApi, aiProposalApi, shoppingListApi } from '@/lib/mealApi'
 
 interface MealState {
   preferences: MealPreference[]
@@ -10,6 +10,7 @@ interface MealState {
   geminiApiKey: string | null
   geminiModelName: string | null
   savedProposal: SavedAiProposal | null  // Supabaseに保存した最新AI提案
+  savedShoppingList: SavedShoppingList | null  // 最新買い物リスト
   initialized: boolean
   loading: boolean
 
@@ -30,7 +31,8 @@ interface MealState {
 
   saveGeminiKey: (key: string) => Promise<void>
   saveGeminiModelName: (modelName: string) => Promise<void>
-  saveAiProposal: (proposal: AiProposal) => Promise<void>
+  saveAiProposal: (proposal: AiProposal, shoppingItems: ShoppingItem[]) => Promise<void>
+  saveShoppingList: (list: Omit<SavedShoppingList, 'id' | 'created_at'>) => Promise<void>
 }
 
 export const useMealStore = create<MealState>()((set, get) => ({
@@ -41,6 +43,7 @@ export const useMealStore = create<MealState>()((set, get) => ({
   geminiApiKey: null,
   geminiModelName: null,
   savedProposal: null,
+  savedShoppingList: null,
   initialized: false,
   loading: false,
 
@@ -48,16 +51,17 @@ export const useMealStore = create<MealState>()((set, get) => ({
     if (get().initialized) return
     set({ loading: true })
     try {
-      const [preferences, recipes, recentPlans, geminiApiKey, geminiModelName, savedProposal] = await Promise.all([
+      const [preferences, recipes, recentPlans, geminiApiKey, geminiModelName, savedProposal, savedShoppingList] = await Promise.all([
         preferencesApi.getAll(),
         recipesApi.getAll(),
         plansApi.getRecent(14),
         geminiKeyApi.get(),
         geminiKeyApi.getModelName(),
         aiProposalApi.getLatest(),
+        shoppingListApi.getLatest(),
       ])
       await plansApi.deleteOld()
-      set({ preferences, recipes, recentPlans, geminiApiKey, geminiModelName, savedProposal, initialized: true })
+      set({ preferences, recipes, recentPlans, geminiApiKey, geminiModelName, savedProposal, savedShoppingList, initialized: true })
     } finally {
       set({ loading: false })
     }
@@ -97,12 +101,12 @@ export const useMealStore = create<MealState>()((set, get) => ({
     const saved = await plansApi.upsert(plan)
     set(s => {
       const filtered = s.weekPlans.filter(
-        p => !(p.date === saved.date && p.meal_type === saved.meal_type),
+        p => !(p.date === saved.date && p.meal_type === saved.meal_type && p.dish_role === saved.dish_role),
       )
       return {
         weekPlans: [...filtered, saved].sort((a, b) => a.date.localeCompare(b.date)),
         recentPlans: [...s.recentPlans.filter(
-          p => !(p.date === saved.date && p.meal_type === saved.meal_type),
+          p => !(p.date === saved.date && p.meal_type === saved.meal_type && p.dish_role === saved.dish_role),
         ), saved].sort((a, b) => a.date.localeCompare(b.date)),
       }
     })
@@ -126,12 +130,17 @@ export const useMealStore = create<MealState>()((set, get) => ({
     set({ geminiModelName: modelName })
   },
 
-  saveAiProposal: async (proposal) => {
+  saveAiProposal: async (proposal, shoppingItems) => {
     const saved = await aiProposalApi.save({
       summary: proposal.summary,
       meals: proposal.meals,
-      shopping_list: proposal.shopping_list,
+      shopping_list: shoppingItems,
     })
     set({ savedProposal: saved })
+  },
+
+  saveShoppingList: async (list) => {
+    const saved = await shoppingListApi.save(list)
+    set({ savedShoppingList: saved })
   },
 }))

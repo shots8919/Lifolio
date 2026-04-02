@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { useMealStore } from '@/stores/mealStore'
-import { generateMealProposal, continueMealChat, GeminiError } from '@/lib/gemini'
-import type { AiProposal, AiProposedMeal, ChatMessage, MealSlotType } from '@/types/meal'
+import { generateMealProposal, continueMealChat, generateShoppingList, GeminiError } from '@/lib/gemini'
+import type { AiProposedMeal, ChatMessage, MealRecipe, ShoppingItem, DishRole } from '@/types/meal'
+import { DISH_ROLE_LABELS } from '@/types/meal'
 
 const WEEKDAY_JP = ['日', '月', '火', '水', '木', '金', '土']
 
@@ -16,47 +17,97 @@ function todayIsoString(): string {
 
 const DIFFICULTY_LABEL = ['', '★ 簡単', '★★ 普通', '★★★ 本格']
 
-// ─── 食事カード ──────────────────────────────────────────────────
+const DISH_ROLE_COLORS: Record<DishRole, { bg: string; border: string; text: string }> = {
+  main:   { bg: 'var(--miyu-bg)',   border: 'var(--miyu-bd)',   text: 'var(--miyu)' },
+  side:   { bg: 'var(--shota-bg)',  border: 'var(--shota-bd)',  text: 'var(--shota)' },
+  soup:   { bg: '#fef3c7',          border: '#fde68a',          text: '#d97706' },
+  single: { bg: 'var(--shota-bg)',  border: 'var(--shota-bd)',  text: 'var(--shota)' },
+}
+
+// ─── 食事カード ─────────────────────────────────────────────────────────────
 
 interface MealCardProps {
   meal: AiProposedMeal
-  isSaved: boolean
-  isSaving: boolean
-  onSavePlan: (meal: AiProposedMeal) => void
-  onAddRecipe: (meal: AiProposedMeal) => void
-  isAddingRecipe: boolean
+  recipes: MealRecipe[]
+  isEditing: boolean
+  onStartEdit: () => void
+  onCancelEdit: () => void
+  onSaveEdit: (updated: Partial<AiProposedMeal>) => void
+  onDelete: () => void
 }
 
-function MealCard({ meal, isSaved, isSaving, onSavePlan, onAddRecipe, isAddingRecipe }: MealCardProps) {
+function MealCard({ meal, recipes, isEditing, onStartEdit, onCancelEdit, onSaveEdit, onDelete }: MealCardProps) {
   const [showSteps, setShowSteps] = useState(false)
+  const [editMode, setEditMode] = useState<'free' | 'recipe'>('free')
+  const [editText, setEditText] = useState(meal.dish_name)
+  const [editRecipeId, setEditRecipeId] = useState(meal._recipeId ?? '')
+
+  const colors = DISH_ROLE_COLORS[meal.dish_role]
   const isLunch = meal.meal_type === 'lunch'
 
+  const inputStyle: React.CSSProperties = { border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--surface)' }
+
+  const handleSave = () => {
+    if (editMode === 'recipe' && editRecipeId) {
+      const r = recipes.find(r => r.id === editRecipeId)
+      onSaveEdit({
+        dish_name: r?.name ?? editText,
+        _recipeId: editRecipeId,
+        ingredients: r?.ingredients ?? meal.ingredients,
+        steps: r?.steps ?? meal.steps,
+      })
+    } else if (editText.trim()) {
+      onSaveEdit({ dish_name: editText.trim(), _recipeId: undefined })
+    }
+  }
+
   return (
-    <div
-      className="rounded-2xl overflow-hidden"
-      style={{ border: `1px solid ${isLunch ? 'var(--shota-bd)' : 'var(--miyu-bd)'}` }}
-    >
-      <div
-        className="flex items-center gap-2 px-3 py-2"
-        style={{ background: isLunch ? 'var(--shota-bg)' : 'var(--miyu-bg)' }}
-      >
-        <span className="text-base">{isLunch ? '☀️' : '🌙'}</span>
-        <span className="text-[11px] font-bold" style={{ color: isLunch ? 'var(--shota)' : 'var(--miyu)' }}>
-          {isLunch ? '昼食' : '夕食'}
-        </span>
-        <span
-          className="text-[10px] px-1.5 py-0.5 rounded-full"
-          style={{ background: isLunch ? 'var(--shota)' : 'var(--miyu)', color: 'white' }}
-        >
-          {meal.genre}
-        </span>
-        <span className="text-[10px]" style={{ color: 'var(--muted)' }}>{meal.type}</span>
+    <div className="rounded-2xl overflow-hidden" style={{ border: `1px solid ${colors.border}` }}>
+      {/* ヘッダー */}
+      <div className="flex items-center justify-between px-3 py-2" style={{ background: colors.bg }}>
+        <div className="flex items-center gap-2">
+          <span className="text-base">{isLunch ? '☀️' : '🌙'}</span>
+          <span className="text-[11px] font-bold" style={{ color: colors.text }}>
+            {DISH_ROLE_LABELS[meal.dish_role]}
+          </span>
+          {meal.genre && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full text-white" style={{ background: colors.text }}>
+              {meal.genre}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={isEditing ? onCancelEdit : onStartEdit}
+            className="h-6 px-2 rounded-lg text-[10px] font-medium transition-opacity hover:opacity-80"
+            style={{ border: `1px solid ${colors.border}`, color: colors.text }}
+          >
+            {isEditing ? 'キャンセル' : '変更'}
+          </button>
+          <button
+            onClick={onDelete}
+            className="h-6 w-6 flex items-center justify-center rounded-lg text-[12px] transition-opacity hover:opacity-80"
+            style={{ border: '1px solid var(--border)', color: 'var(--muted)' }}
+          >
+            ×
+          </button>
+        </div>
       </div>
 
+      {/* コンテンツ */}
       <div className="px-3 pt-2.5 pb-3">
         <p className="font-bold text-[15px] leading-snug mb-1.5" style={{ color: 'var(--text)' }}>
           {meal.dish_name}
+          {meal._recipeId && (
+            <span
+              className="ml-1.5 text-[10px] font-normal px-1.5 py-0.5 rounded-full"
+              style={{ background: 'var(--shota-bg)', color: 'var(--shota)', border: '1px solid var(--shota-bd)' }}
+            >
+              レシピあり
+            </span>
+          )}
         </p>
+
         <div className="flex flex-wrap gap-2 text-[11px]" style={{ color: 'var(--muted)' }}>
           {meal.difficulty != null && <span>{DIFFICULTY_LABEL[meal.difficulty] ?? ''}</span>}
           {meal.duration_min && <span>🕐 {meal.duration_min}分</span>}
@@ -78,12 +129,11 @@ function MealCard({ meal, isSaved, isSaving, onSavePlan, onAddRecipe, isAddingRe
             <button
               onClick={() => setShowSteps(s => !s)}
               className="flex items-center gap-1 text-[11px] font-medium transition-opacity hover:opacity-70"
-              style={{ color: isLunch ? 'var(--shota)' : 'var(--miyu)' }}
+              style={{ color: colors.text }}
             >
-              <span
-                className="inline-block transition-transform"
-                style={{ transform: showSteps ? 'rotate(90deg)' : 'rotate(0deg)', display: 'inline-block' }}
-              >▶</span>
+              <span style={{ display: 'inline-block', transform: showSteps ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>
+                ▶
+              </span>
               {showSteps ? 'レシピを閉じる' : 'レシピを見る'}
             </button>
             {showSteps && (
@@ -97,37 +147,76 @@ function MealCard({ meal, isSaved, isSaving, onSavePlan, onAddRecipe, isAddingRe
           </div>
         )}
 
-        <div className="flex gap-2 mt-3">
-          <button
-            onClick={() => onSavePlan(meal)}
-            disabled={isSaving || isSaved}
-            className="flex-1 h-9 rounded-xl text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-            style={{ background: isSaved ? '#6b7280' : (isLunch ? 'var(--shota)' : 'var(--miyu)') }}
-          >
-            {isSaved ? '✓ 計画済み' : isSaving ? '保存中...' : '計画に追加'}
-          </button>
-          <button
-            onClick={() => onAddRecipe(meal)}
-            disabled={isAddingRecipe}
-            className="h-9 px-3 rounded-xl text-xs font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
-            style={{
-              border: `1px solid ${isLunch ? 'var(--shota-bd)' : 'var(--miyu-bd)'}`,
-              color: isLunch ? 'var(--shota)' : 'var(--miyu)',
-            }}
-          >
-            {isAddingRecipe ? '追加中...' : 'レシピ保存'}
-          </button>
-        </div>
+        {/* インライン編集フォーム */}
+        {isEditing && (
+          <div className="mt-3 pt-3 space-y-2" style={{ borderTop: '1px solid var(--border)' }}>
+            <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+              {(['free', 'recipe'] as const).map(m => (
+                <button
+                  key={m}
+                  onClick={() => setEditMode(m)}
+                  className="flex-1 h-7 text-[11px] font-medium transition-colors"
+                  style={{
+                    background: editMode === m ? 'var(--shota)' : 'var(--surface)',
+                    color: editMode === m ? 'white' : 'var(--muted)',
+                  }}
+                >
+                  {m === 'recipe' ? 'レシピから選ぶ' : '自由入力'}
+                </button>
+              ))}
+            </div>
+            {editMode === 'free' ? (
+              <input
+                type="text"
+                value={editText}
+                onChange={e => setEditText(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
+                autoFocus
+                className="w-full h-9 px-3 rounded-xl text-sm outline-none"
+                style={inputStyle}
+              />
+            ) : (
+              <select
+                value={editRecipeId}
+                onChange={e => setEditRecipeId(e.target.value)}
+                className="w-full h-9 px-3 rounded-xl text-sm outline-none"
+                style={inputStyle}
+              >
+                <option value="">レシピを選択...</option>
+                {recipes.map(r => (
+                  <option key={r.id} value={r.id}>{r.name}（{r.genre}・{r.type}）</option>
+                ))}
+              </select>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={handleSave}
+                disabled={editMode === 'recipe' ? !editRecipeId : !editText.trim()}
+                className="flex-1 h-8 rounded-xl text-xs font-semibold text-white disabled:opacity-50 transition-opacity hover:opacity-90"
+                style={{ background: 'var(--shota)' }}
+              >
+                保存
+              </button>
+              <button
+                onClick={onCancelEdit}
+                className="h-8 px-3 rounded-xl text-xs transition-opacity hover:opacity-80"
+                style={{ border: '1px solid var(--border)', color: 'var(--muted)' }}
+              >
+                キャンセル
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-// ─── 買い物リスト（インライン） ─────────────────────────────────
+// ─── 買い物リスト ────────────────────────────────────────────────────────────
 
-function ShoppingListSection({ list }: { list: AiProposal['shopping_list'] }) {
-  const [open, setOpen] = useState(false)
-  const grouped: Record<string, typeof list> = {}
+function ShoppingListSection({ list }: { list: ShoppingItem[] }) {
+  const [open, setOpen] = useState(true)
+  const grouped: Record<string, ShoppingItem[]> = {}
   list.forEach(item => {
     if (!grouped[item.category]) grouped[item.category] = []
     grouped[item.category].push(item)
@@ -144,7 +233,8 @@ function ShoppingListSection({ list }: { list: AiProposal['shopping_list'] }) {
         style={{ background: 'var(--subtle)' }}
       >
         <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
-          🛒 買い物リスト <span className="font-normal" style={{ color: 'var(--muted)' }}>({list.length}品目)</span>
+          🛒 買い物リスト{' '}
+          <span className="font-normal" style={{ color: 'var(--muted)' }}>({list.length}品目)</span>
         </span>
         <span className="text-xs" style={{ color: 'var(--muted)' }}>{open ? '▲' : '▼'}</span>
       </button>
@@ -178,70 +268,86 @@ function ShoppingListSection({ list }: { list: AiProposal['shopping_list'] }) {
   )
 }
 
-// ─── メインパネル ──────────────────────────────────────────────
+// ─── メインパネル ─────────────────────────────────────────────────────────────
 
-interface AiProposalPanelProps {
-  onSaveMeal: (date: string, mealType: MealSlotType, dishName: string) => Promise<void>
-}
+export default function AiProposalPanel() {
+  const geminiApiKey     = useMealStore(s => s.geminiApiKey)
+  const geminiModelName  = useMealStore(s => s.geminiModelName)
+  const preferences      = useMealStore(s => s.preferences)
+  const recipes          = useMealStore(s => s.recipes)
+  const recentPlans      = useMealStore(s => s.recentPlans)
+  const savedProposal    = useMealStore(s => s.savedProposal)
+  const saveAiProposal   = useMealStore(s => s.saveAiProposal)
+  const saveShoppingList = useMealStore(s => s.saveShoppingList)
+  const upsertPlan       = useMealStore(s => s.upsertPlan)
 
-export default function AiProposalPanel({ onSaveMeal }: AiProposalPanelProps) {
-  const geminiApiKey    = useMealStore(s => s.geminiApiKey)
-  const geminiModelName = useMealStore(s => s.geminiModelName)
-  const preferences     = useMealStore(s => s.preferences)
-  const recipes         = useMealStore(s => s.recipes)
-  const recentPlans     = useMealStore(s => s.recentPlans)
-  const savedProposal   = useMealStore(s => s.savedProposal)
-  const saveAiProposal  = useMealStore(s => s.saveAiProposal)
-  const addRecipe       = useMealStore(s => s.addRecipe)
-
-  const [days, setDays] = useState(7)
-  const [startDate, setStartDate] = useState(todayIsoString)
-  const [theme, setTheme] = useState('')
+  // ── フォーム ──
+  const [days, setDays]               = useState(5)
+  const [startDate, setStartDate]     = useState(todayIsoString)
+  const [theme, setTheme]             = useState('')
   const [ingredients, setIngredients] = useState('')
+  const [requiredRecipes, setRequiredRecipes]     = useState<MealRecipe[]>([])
+  const [reqRecipeSelectId, setReqRecipeSelectId] = useState('')
 
-  const [proposal, setProposal] = useState<AiProposal | null>(null)
+  // ── 提案 ──
+  const [hasProposal, setHasProposal]         = useState(false)
+  const [meals, setMeals]                     = useState<AiProposedMeal[]>([])
+  const [proposalSummary, setProposalSummary] = useState('')
+  const [editingId, setEditingId]             = useState<string | null>(null)
+
+  // ── チャット ──
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [proposalSaved, setProposalSaved] = useState(false)
-  const [saving, setSaving] = useState(false)
-
-  const [savedMeals, setSavedMeals] = useState<Set<string>>(new Set())
-  const [savingMeal, setSavingMeal] = useState<string | null>(null)
-  const [addingRecipe, setAddingRecipe] = useState<string | null>(null)
-  const [showChat, setShowChat] = useState(false)
-  const [chatInput, setChatInput] = useState('')
+  const [chatInput, setChatInput]     = useState('')
+  const [showChat, setShowChat]       = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
+
+  // ── ローディング/エラー ──
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState('')
+
+  // ── 確定フロー ──
+  const [confirming, setConfirming]     = useState(false)
+  const [confirmed, setConfirmed]       = useState(false)
+  const [shoppingList, setShoppingList] = useState<ShoppingItem[] | null>(null)
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatHistory])
 
-  const mealsByDate = proposal
-    ? proposal.meals.reduce<Record<string, AiProposedMeal[]>>((acc, m) => {
-        if (!acc[m.date]) acc[m.date] = []
-        acc[m.date].push(m)
-        return acc
-      }, {})
-    : {}
+  const mealsByDate = meals.reduce<Record<string, AiProposedMeal[]>>((acc, m) => {
+    if (!acc[m.date]) acc[m.date] = []
+    acc[m.date].push(m)
+    return acc
+  }, {})
   const sortedDates = Object.keys(mealsByDate).sort()
+
+  const DINNER_ORDER: DishRole[] = ['main', 'side', 'soup']
+
+  const applyProposal = (result: { summary: string; meals: AiProposedMeal[] }) => {
+    setMeals(result.meals)
+    setProposalSummary(result.summary)
+    setHasProposal(true)
+    setConfirmed(false)
+    setShoppingList(null)
+    setEditingId(null)
+  }
 
   const handleGenerate = async () => {
     if (!geminiApiKey) { setError('設定画面でGroq APIキーを登録してください'); return }
-    setLoading(true); setError(''); setChatHistory([]); setProposal(null)
-    setSavedMeals(new Set()); setProposalSaved(false)
+    setLoading(true); setError(''); setChatHistory([])
     try {
       const result = await generateMealProposal(geminiApiKey, {
-        days, startDate, theme, ingredients, preferences, recentPlans, recipes,
+        days, startDate, theme, ingredients,
+        requiredRecipes, preferences, recentPlans, recipes,
         modelName: geminiModelName,
       })
-      setProposal(result)
+      applyProposal(result)
       setChatHistory([
         { role: 'user', text: `${days}日分（${startDate}〜）の献立を提案してください。テーマ: ${theme || 'なし'}` },
-        { role: 'model', text: result.summary, proposal: result },
+        { role: 'model', text: result.summary },
       ])
     } catch (err) {
-      setError(err instanceof GeminiError ? err.message : 'AIの応答に失敗しました')
+      setError(err instanceof GeminiError ? err.message : `AIの応答に失敗しました: ${(err as Error).message ?? String(err)}`)
     } finally {
       setLoading(false)
     }
@@ -255,131 +361,245 @@ export default function AiProposalPanel({ onSaveMeal }: AiProposalPanelProps) {
     setChatHistory(newHistory)
     try {
       const result = await continueMealChat(geminiApiKey, newHistory, userText, {
-        preferences, recentPlans, recipes, modelName: geminiModelName,
+        preferences, recentPlans, recipes, requiredRecipes, modelName: geminiModelName,
       })
-      setProposal(result)
-      setSavedMeals(new Set()); setProposalSaved(false)
-      setChatHistory(h => [...h, { role: 'model', text: result.summary, proposal: result }])
+      applyProposal(result)
+      setChatHistory(h => [...h, { role: 'model', text: result.summary }])
     } catch (err) {
-      setError(err instanceof GeminiError ? err.message : 'AIの応答に失敗しました')
+      setError(err instanceof GeminiError ? err.message : `AIの応答に失敗しました: ${(err as Error).message ?? String(err)}`)
       setChatHistory(h => h.slice(0, -1))
     } finally {
       setLoading(false)
     }
   }
 
-  const handleSaveMeal = async (meal: AiProposedMeal) => {
-    const key = `${meal.date}-${meal.meal_type}`
-    setSavingMeal(key)
+  const handleEditMeal = (localId: string, updated: Partial<AiProposedMeal>) => {
+    setMeals(prev => prev.map(m => m._localId === localId ? { ...m, ...updated } : m))
+    setEditingId(null)
+  }
+
+  const handleDeleteMeal = (localId: string) => {
+    setMeals(prev => prev.filter(m => m._localId !== localId))
+    if (editingId === localId) setEditingId(null)
+  }
+
+  const handleConfirm = async () => {
+    if (!geminiApiKey || meals.length === 0) return
+    setConfirming(true); setError('')
     try {
-      await onSaveMeal(meal.date, meal.meal_type, meal.dish_name)
-      setSavedMeals(s => new Set([...s, key]))
+      // 1. 全料理をDBに保存
+      for (const meal of meals) {
+        await upsertPlan({
+          date: meal.date,
+          meal_type: meal.meal_type,
+          dish_role: meal.dish_role,
+          recipe_id: meal._recipeId ?? null,
+          free_text: meal._recipeId ? null : meal.dish_name,
+          ai_proposal: true,
+        })
+      }
+      // 2. 買い物リストをAI生成
+      const items = await generateShoppingList(geminiApiKey, meals, geminiModelName)
+      setShoppingList(items)
+      // 3. 買い物リストをDBに保存
+      if (items.length > 0 && sortedDates.length > 0) {
+        await saveShoppingList({
+          date_from: sortedDates[0],
+          date_to: sortedDates[sortedDates.length - 1],
+          items,
+        })
+      }
+      // 4. 提案をDBに保存（復元用）
+      await saveAiProposal({ summary: proposalSummary, meals }, items)
+      setConfirmed(true)
+    } catch (err) {
+      setError(`確定処理に失敗しました: ${(err as Error).message ?? String(err)}`)
     } finally {
-      setSavingMeal(null)
+      setConfirming(false)
     }
-  }
-
-  const handleSaveAll = async () => {
-    if (!proposal) return
-    for (const meal of proposal.meals) await handleSaveMeal(meal)
-  }
-
-  const handleSaveProposal = async () => {
-    if (!proposal) return
-    setSaving(true)
-    try {
-      await saveAiProposal(proposal)
-      setProposalSaved(true)
-    } catch { setError('提案の保存に失敗しました') }
-    finally { setSaving(false) }
-  }
-
-  const handleAddRecipe = async (meal: AiProposedMeal) => {
-    const key = `${meal.date}-${meal.meal_type}`
-    setAddingRecipe(key)
-    try {
-      await addRecipe({
-        name: meal.dish_name,
-        genre: meal.genre as never,
-        type: meal.type as never,
-        difficulty: (meal.difficulty ?? 2) as 1 | 2 | 3,
-        duration_min: meal.duration_min,
-        ingredients: meal.ingredients ?? '',
-        steps: meal.steps ?? '',
-        memo: meal.note ?? '',
-        source_url: null,
-        is_favorite: false,
-      })
-    } finally { setAddingRecipe(null) }
   }
 
   const handleRestoreSaved = () => {
     if (!savedProposal) return
-    setProposal({ summary: savedProposal.summary, meals: savedProposal.meals, shopping_list: savedProposal.shopping_list })
-    setSavedMeals(new Set()); setProposalSaved(true); setChatHistory([])
+    applyProposal({
+      summary: savedProposal.summary,
+      meals: savedProposal.meals.map((m, i) => ({ ...m, _localId: m._localId ?? `saved-${i}` })),
+    })
+    if (savedProposal.shopping_list?.length > 0) setShoppingList(savedProposal.shopping_list)
+    setChatHistory([])
   }
 
   const handleReset = () => {
-    setProposal(null); setChatHistory([]); setError('')
-    setSavedMeals(new Set()); setProposalSaved(false); setShowChat(false)
+    setHasProposal(false)
+    setMeals([])
+    setProposalSummary('')
+    setChatHistory([])
+    setError('')
+    setEditingId(null)
+    setConfirmed(false)
+    setShoppingList(null)
+    setShowChat(false)
   }
 
-  const inputStyle: React.CSSProperties = { border: '1px solid var(--border)', color: 'var(--text)', background: 'var(--surface)' }
+  const addRequiredRecipe = () => {
+    if (!reqRecipeSelectId) return
+    const r = recipes.find(r => r.id === reqRecipeSelectId)
+    if (r && !requiredRecipes.find(rr => rr.id === r.id)) {
+      setRequiredRecipes(prev => [...prev, r])
+    }
+    setReqRecipeSelectId('')
+  }
+
+  const removeRequiredRecipe = (id: string) => {
+    setRequiredRecipes(prev => prev.filter(r => r.id !== id))
+  }
+
+  const inputStyle: React.CSSProperties = {
+    border: '1px solid var(--border)',
+    color: 'var(--text)',
+    background: 'var(--surface)',
+  }
 
   return (
     <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--miyu-bd)' }}>
       {/* ヘッダー */}
-      <div className="flex items-center justify-between px-4 py-3" style={{ background: 'var(--miyu-bg)', borderBottom: '1px solid var(--miyu-bd)' }}>
+      <div
+        className="flex items-center justify-between px-4 py-3"
+        style={{ background: 'var(--miyu-bg)', borderBottom: '1px solid var(--miyu-bd)' }}
+      >
         <div className="flex items-center gap-2">
           <span className="text-base">✨</span>
           <span className="text-sm font-bold" style={{ color: 'var(--miyu)' }}>AI 献立提案</span>
         </div>
-        {proposalSaved && (
-          <span className="text-[11px] px-2 py-1 rounded-full font-medium" style={{ background: 'var(--miyu)', color: 'white' }}>
-            ✓ 保存済み
+        {confirmed && (
+          <span className="text-[11px] px-2 py-1 rounded-full font-medium text-white" style={{ background: 'var(--shota)' }}>
+            ✓ 確定済み
           </span>
         )}
       </div>
 
       <div className="p-4 space-y-4">
         {/* 保存済み提案バナー */}
-        {!proposal && savedProposal && (
-          <div className="flex items-center justify-between p-3 rounded-xl" style={{ background: 'var(--shota-bg)', border: '1px solid var(--shota-bd)' }}>
+        {!hasProposal && savedProposal && (
+          <div
+            className="flex items-center justify-between p-3 rounded-xl"
+            style={{ background: 'var(--shota-bg)', border: '1px solid var(--shota-bd)' }}
+          >
             <div>
               <p className="text-xs font-semibold" style={{ color: 'var(--shota)' }}>前回の保存済み提案があります</p>
               <p className="text-[11px] mt-0.5" style={{ color: 'var(--muted)' }}>
                 {new Date(savedProposal.created_at).toLocaleDateString('ja-JP')} 保存 ・ {savedProposal.meals.length}食分
               </p>
             </div>
-            <button onClick={handleRestoreSaved} className="h-8 px-3 rounded-xl text-xs font-semibold text-white" style={{ background: 'var(--shota)' }}>
+            <button
+              onClick={handleRestoreSaved}
+              className="h-8 px-3 rounded-xl text-xs font-semibold text-white"
+              style={{ background: 'var(--shota)' }}
+            >
               復元
             </button>
           </div>
         )}
 
-        {/* 入力フォーム */}
-        {!proposal && (
+        {/* ── 入力フォーム ── */}
+        {!hasProposal && (
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--muted)' }}>何日分</label>
-                <select value={days} onChange={e => setDays(Number(e.target.value))} className="w-full h-10 px-3 rounded-xl text-sm outline-none" style={inputStyle}>
-                  {[3, 5, 7, 10, 14].map(d => <option key={d} value={d}>{d}日分</option>)}
+                <select
+                  value={days}
+                  onChange={e => setDays(Number(e.target.value))}
+                  className="w-full h-10 px-3 rounded-xl text-sm outline-none"
+                  style={inputStyle}
+                >
+                  {[1, 2, 3, 4, 5, 6, 7].map(d => (
+                    <option key={d} value={d}>{d}日分</option>
+                  ))}
                 </select>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--muted)' }}>開始日</label>
-                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full h-10 px-3 rounded-xl text-sm outline-none" style={inputStyle} />
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={e => setStartDate(e.target.value)}
+                  className="w-full h-10 px-3 rounded-xl text-sm outline-none"
+                  style={inputStyle}
+                />
               </div>
             </div>
+
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--muted)' }}>テーマ・希望（省略可）</label>
-              <input type="text" placeholder="例: 和食多め、簡単なもの中心" value={theme} onChange={e => setTheme(e.target.value)} className="w-full h-10 px-3 rounded-xl text-sm outline-none" style={inputStyle} />
+              <input
+                type="text"
+                placeholder="例: 和食多め、簡単なもの中心"
+                value={theme}
+                onChange={e => setTheme(e.target.value)}
+                className="w-full h-10 px-3 rounded-xl text-sm outline-none"
+                style={inputStyle}
+              />
             </div>
+
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--muted)' }}>冷蔵庫の残り食材（省略可）</label>
-              <input type="text" placeholder="例: 鶏肉、キャベツ、卵" value={ingredients} onChange={e => setIngredients(e.target.value)} className="w-full h-10 px-3 rounded-xl text-sm outline-none" style={inputStyle} />
+              <input
+                type="text"
+                placeholder="例: 鶏肉、キャベツ、卵"
+                value={ingredients}
+                onChange={e => setIngredients(e.target.value)}
+                className="w-full h-10 px-3 rounded-xl text-sm outline-none"
+                style={inputStyle}
+              />
             </div>
+
+            {/* レシピ指定 */}
+            {recipes.length > 0 && (
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--muted)' }}>
+                  使うレシピを指定（省略可・最大{days}個）
+                </label>
+                <div className="flex gap-2">
+                  <select
+                    value={reqRecipeSelectId}
+                    onChange={e => setReqRecipeSelectId(e.target.value)}
+                    className="flex-1 h-9 px-2 rounded-xl text-sm outline-none"
+                    style={inputStyle}
+                  >
+                    <option value="">レシピを選択...</option>
+                    {recipes
+                      .filter(r => !requiredRecipes.find(rr => rr.id === r.id))
+                      .map(r => (
+                        <option key={r.id} value={r.id}>{r.name}（{r.genre}）</option>
+                      ))}
+                  </select>
+                  <button
+                    onClick={addRequiredRecipe}
+                    disabled={!reqRecipeSelectId || requiredRecipes.length >= days}
+                    className="h-9 px-3 rounded-xl text-xs font-semibold text-white disabled:opacity-40 transition-opacity hover:opacity-90"
+                    style={{ background: 'var(--shota)' }}
+                  >
+                    追加
+                  </button>
+                </div>
+                {requiredRecipes.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {requiredRecipes.map(r => (
+                      <span
+                        key={r.id}
+                        className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-full"
+                        style={{ background: 'var(--shota-bg)', border: '1px solid var(--shota-bd)', color: 'var(--shota)' }}
+                      >
+                        {r.name}
+                        <button onClick={() => removeRequiredRecipe(r.id)} className="transition-opacity hover:opacity-70">×</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             <button
               onClick={handleGenerate}
               disabled={loading}
@@ -392,9 +612,12 @@ export default function AiProposalPanel({ onSaveMeal }: AiProposalPanelProps) {
         )}
 
         {/* ローディング */}
-        {loading && !proposal && (
+        {loading && !hasProposal && (
           <div className="flex flex-col items-center gap-3 py-8">
-            <div className="w-8 h-8 rounded-full border-4 border-t-transparent animate-spin" style={{ borderColor: 'var(--miyu)', borderTopColor: 'transparent' }} />
+            <div
+              className="w-8 h-8 rounded-full border-4 border-t-transparent animate-spin"
+              style={{ borderColor: 'var(--miyu)', borderTopColor: 'transparent' }}
+            />
             <p className="text-sm" style={{ color: 'var(--muted)' }}>AIが献立を考えています...</p>
           </div>
         )}
@@ -406,77 +629,102 @@ export default function AiProposalPanel({ onSaveMeal }: AiProposalPanelProps) {
           </div>
         )}
 
-        {/* ─── 提案結果 ─── */}
-        {proposal && (
+        {/* ── 提案結果 ── */}
+        {hasProposal && (
           <div className="space-y-4">
-            {/* 概要 */}
-            <div className="p-3 rounded-xl text-sm leading-relaxed" style={{ background: 'var(--miyu-bg)', border: '1px solid var(--miyu-bd)', color: 'var(--text)' }}>
+            {/* サマリー */}
+            <div
+              className="p-3 rounded-xl text-sm leading-relaxed"
+              style={{ background: 'var(--miyu-bg)', border: '1px solid var(--miyu-bd)', color: 'var(--text)' }}
+            >
               <span className="font-semibold" style={{ color: 'var(--miyu)' }}>📋 </span>
-              {proposal.summary}
+              {proposalSummary}
             </div>
 
             {/* 日付ごとグループ */}
-            {sortedDates.map(date => (
-              <div key={date} className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-sm" style={{ color: 'var(--text)' }}>{formatDate(date)}</span>
-                  <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
-                </div>
-                {[...mealsByDate[date]]
-                  .sort((a, b) => (a.meal_type === 'lunch' ? -1 : 1) - (b.meal_type === 'lunch' ? -1 : 1))
-                  .map((meal, i) => {
-                    const key = `${meal.date}-${meal.meal_type}`
-                    return (
-                      <MealCard
-                        key={i}
-                        meal={meal}
-                        isSaved={savedMeals.has(key)}
-                        isSaving={savingMeal === key}
-                        onSavePlan={handleSaveMeal}
-                        onAddRecipe={handleAddRecipe}
-                        isAddingRecipe={addingRecipe === key}
-                      />
-                    )
-                  })}
-              </div>
-            ))}
+            {sortedDates.map(date => {
+              const dayMeals = mealsByDate[date] ?? []
+              const lunches = dayMeals.filter(m => m.meal_type === 'lunch')
+              const dinners = dayMeals
+                .filter(m => m.meal_type === 'dinner')
+                .sort((a, b) => DINNER_ORDER.indexOf(a.dish_role) - DINNER_ORDER.indexOf(b.dish_role))
 
-            {/* 買い物リスト */}
-            {proposal.shopping_list.length > 0 && (
-              <ShoppingListSection list={proposal.shopping_list} />
+              return (
+                <div key={date} className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm" style={{ color: 'var(--text)' }}>{formatDate(date)}</span>
+                    <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
+                    <span className="text-[11px]" style={{ color: 'var(--muted)' }}>{lunches.length + dinners.length}品</span>
+                  </div>
+
+                  {[...lunches, ...dinners].map(meal => (
+                    <MealCard
+                      key={meal._localId ?? `${meal.date}-${meal.meal_type}-${meal.dish_role}`}
+                      meal={meal}
+                      recipes={recipes}
+                      isEditing={editingId === meal._localId}
+                      onStartEdit={() => setEditingId(meal._localId ?? null)}
+                      onCancelEdit={() => setEditingId(null)}
+                      onSaveEdit={updated => {
+                        if (meal._localId) handleEditMeal(meal._localId, updated)
+                      }}
+                      onDelete={() => {
+                        if (meal._localId) handleDeleteMeal(meal._localId)
+                      }}
+                    />
+                  ))}
+                </div>
+              )
+            })}
+
+            {/* 確定ボタン */}
+            {!confirmed && (
+              <button
+                onClick={handleConfirm}
+                disabled={confirming || meals.length === 0}
+                className="w-full h-12 rounded-2xl text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                style={{ background: 'var(--shota)' }}
+              >
+                {confirming ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span
+                      className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin"
+                      style={{ borderColor: 'white', borderTopColor: 'transparent' }}
+                    />
+                    処理中...
+                  </span>
+                ) : `✅ 確定して買い物リストを作成（${meals.length}品）`}
+              </button>
             )}
 
-            {/* アクション */}
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={handleSaveAll}
-                className="h-11 rounded-2xl text-sm font-semibold text-white transition-opacity hover:opacity-90"
-                style={{ background: 'var(--miyu)' }}
+            {/* 確定済みメッセージ */}
+            {confirmed && (
+              <div
+                className="p-3 rounded-xl text-sm text-center font-medium"
+                style={{ background: 'var(--shota-bg)', color: 'var(--shota)', border: '1px solid var(--shota-bd)' }}
               >
-                全て計画に追加
-              </button>
-              <button
-                onClick={handleSaveProposal}
-                disabled={saving || proposalSaved}
-                className="h-11 rounded-2xl text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-50"
-                style={{
-                  background: proposalSaved ? 'var(--subtle)' : 'var(--shota-bg)',
-                  color: proposalSaved ? 'var(--muted)' : 'var(--shota)',
-                  border: `1px solid ${proposalSaved ? 'var(--border)' : 'var(--shota-bd)'}`,
-                }}
-              >
-                {saving ? '保存中...' : proposalSaved ? '✓ 保存済み' : '📌 提案を保存'}
-              </button>
-            </div>
+                ✅ 献立を確定し、カレンダーに保存しました
+              </div>
+            )}
 
-            {/* チャット */}
+            {/* 買い物リスト */}
+            {shoppingList && shoppingList.length > 0 && (
+              <ShoppingListSection list={shoppingList} />
+            )}
+            {shoppingList?.length === 0 && confirmed && (
+              <p className="text-xs text-center" style={{ color: 'var(--muted)' }}>
+                ※ 買い物リストが空でした
+              </p>
+            )}
+
+            {/* チャット微修正 */}
             <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
               <button
                 onClick={() => setShowChat(c => !c)}
                 className="w-full flex items-center justify-between px-4 py-3"
                 style={{ background: 'var(--subtle)' }}
               >
-                <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>💬 微修正チャット</span>
+                <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>💬 AIに調整を依頼</span>
                 <span className="text-xs" style={{ color: 'var(--muted)' }}>{showChat ? '▲' : '▼'}</span>
               </button>
               {showChat && (
@@ -504,7 +752,10 @@ export default function AiProposalPanel({ onSaveMeal }: AiProposalPanelProps) {
                   )}
                   {loading && (
                     <div className="flex items-center gap-2 py-1">
-                      <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: 'var(--miyu)', borderTopColor: 'transparent' }} />
+                      <div
+                        className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0"
+                        style={{ borderColor: 'var(--miyu)', borderTopColor: 'transparent' }}
+                      />
                       <span className="text-xs" style={{ color: 'var(--muted)' }}>考えています...</span>
                     </div>
                   )}
@@ -532,7 +783,11 @@ export default function AiProposalPanel({ onSaveMeal }: AiProposalPanelProps) {
               )}
             </div>
 
-            <button onClick={handleReset} className="w-full text-xs py-1 transition-opacity hover:opacity-70" style={{ color: 'var(--muted)' }}>
+            <button
+              onClick={handleReset}
+              className="w-full text-xs py-1 transition-opacity hover:opacity-70"
+              style={{ color: 'var(--muted)' }}
+            >
               ← 最初からやり直す
             </button>
           </div>

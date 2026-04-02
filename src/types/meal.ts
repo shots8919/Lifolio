@@ -43,11 +43,22 @@ export interface MealRecipe {
 // ─── 献立計画 ────────────────────────────────────────────────────
 export type MealSlotType = 'lunch' | 'dinner'
 
+/** 夕食の品目役割: main=主食・主菜, side=副菜, soup=汁物, single=昼食1品 */
+export type DishRole = 'single' | 'main' | 'side' | 'soup'
+
+export const DISH_ROLE_LABELS: Record<DishRole, string> = {
+  single: '一品料理',
+  main: '主食・主菜',
+  side: '副菜',
+  soup: '汁物',
+}
+
 export interface MealPlan {
   id: string
   created_at: string
   date: string         // 'YYYY-MM-DD'
   meal_type: MealSlotType
+  dish_role: DishRole
   recipe_id: string | null
   free_text: string | null
   ai_proposal: boolean
@@ -58,20 +69,24 @@ export interface MealPlan {
 export interface AiProposedMeal {
   date: string
   meal_type: MealSlotType
+  dish_role: DishRole
   dish_name: string
   genre: string
   type: string
   ingredients: string
-  steps?: string          // 調理手順（詳細）
+  steps?: string
   duration_min: number | null
   difficulty: number | null
   note: string
+  /** 提案フロントエンド内でのみ使用するID */
+  _localId?: string
+  /** ユーザーがレシピから変更した場合のrecipe_id（フロントエンドのみ） */
+  _recipeId?: string
 }
 
 export interface AiProposal {
   summary: string
   meals: AiProposedMeal[]
-  shopping_list: { item: string; amount: string; category: string }[]
 }
 
 export interface SavedAiProposal {
@@ -79,7 +94,21 @@ export interface SavedAiProposal {
   created_at: string
   summary: string
   meals: AiProposedMeal[]
-  shopping_list: { item: string; amount: string; category: string }[]
+  shopping_list: ShoppingItem[]
+}
+
+export interface ShoppingItem {
+  item: string
+  amount: string
+  category: string
+}
+
+export interface SavedShoppingList {
+  id: string
+  created_at: string
+  date_from: string
+  date_to: string
+  items: ShoppingItem[]
 }
 
 export interface ChatMessage {

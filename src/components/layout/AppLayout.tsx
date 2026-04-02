@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Header from './Header'
+import BottomNav from './BottomNav'
 
 export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -17,21 +18,25 @@ export default function AppLayout() {
         />
       )}
 
-      {/* サイドバー */}
+      {/* サイドバー（左メニュー：ログアウト等） */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       {/* メインコンテンツ */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* モバイルヘッダー */}
+        {/* モバイルヘッダー（ハンバーガーメニュー） */}
         <Header onMenuClick={() => setSidebarOpen(true)} />
 
         {/* ページコンテンツ */}
         <main className="flex-1 overflow-y-auto" style={{ background: 'var(--bg)' }}>
-          <div className="p-4 lg:p-6 max-w-4xl mx-auto">
+          {/* lg未満ではボトムナビ分の余白を確保 */}
+          <div className="p-4 pb-20 lg:p-6 lg:pb-20 max-w-4xl mx-auto">
             <Outlet />
           </div>
         </main>
       </div>
+
+      {/* ボトムナビゲーション（モバイル固定） */}
+      <BottomNav />
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { MealPreference, MealRecipe, MealPlan, SavedAiProposal } from '@/types/meal'
+import type { MealPreference, MealRecipe, MealPlan, SavedAiProposal, SavedShoppingList } from '@/types/meal'
 
 // ─── 好み管理 ────────────────────────────────────────────────────
 export const preferencesApi = {
@@ -105,7 +105,7 @@ export const plansApi = {
   ): Promise<MealPlan> {
     const { data, error } = await supabase
       .from('meal_plans')
-      .upsert(plan, { onConflict: 'date,meal_type' })
+      .upsert(plan, { onConflict: 'date,meal_type,dish_role' })
       .select('*, recipe:meal_recipes(*)')
       .single()
     if (error) throw error
@@ -126,6 +126,40 @@ export const plansApi = {
       .delete()
       .lt('date', cutoff.toISOString().split('T')[0])
     if (error) throw error
+  },
+}
+
+// ─── 買い物リスト保存 ──────────────────────────────────────────────
+export const shoppingListApi = {
+  async getLatest(): Promise<SavedShoppingList | null> {
+    const { data } = await supabase
+      .from('meal_shopping_lists')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    return (data ?? null) as SavedShoppingList | null
+  },
+
+  async save(
+    list: Omit<SavedShoppingList, 'id' | 'created_at'>,
+  ): Promise<SavedShoppingList> {
+    const { data, error } = await supabase
+      .from('meal_shopping_lists')
+      .insert(list)
+      .select()
+      .single()
+    if (error) throw error
+    // 古いリストを削除（最新5件まで保持）
+    const { data: all } = await supabase
+      .from('meal_shopping_lists')
+      .select('id')
+      .order('created_at', { ascending: false })
+    const keepIds = (all ?? []).slice(0, 5).map((r: { id: string }) => r.id)
+    if (keepIds.length > 0) {
+      await supabase.from('meal_shopping_lists').delete().not('id', 'in', `(${keepIds.map(id => `'${id}'`).join(',')})`)
+    }
+    return data as SavedShoppingList
   },
 }
 

@@ -1,4 +1,4 @@
-import type { MealPreference, MealPlan, MealRecipe, AiProposal, ChatMessage } from '@/types/meal'
+import type { MealPreference, MealPlan, MealRecipe, AiProposal, AiProposedMeal, ChatMessage, ShoppingItem } from '@/types/meal'
 
 // Groq API（OpenAI互換）エンドポイント
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
@@ -55,16 +55,30 @@ async function callGroq(
 function extractJson<T>(text: string): T {
   // ```json ... ``` ブロックを優先して検索
   const blockMatch = text.match(/```json\s*([\s\S]*?)```/)
-  if (blockMatch) {
-    return JSON.parse(blockMatch[1].trim()) as T
+  const jsonStr = blockMatch ? blockMatch[1].trim() : (() => {
+    const start = text.indexOf('{')
+    const end = text.lastIndexOf('}')
+    return start !== -1 && end !== -1 ? text.slice(start, end + 1) : null
+  })()
+
+  if (!jsonStr) {
+    throw new GeminiError(`AIからの応答をJSONとして解析できませんでした\n---応答内容---\n${text.slice(0, 300)}`)
   }
-  // フォールバック: { } の範囲を探す
-  const start = text.indexOf('{')
-  const end = text.lastIndexOf('}')
-  if (start !== -1 && end !== -1) {
-    return JSON.parse(text.slice(start, end + 1)) as T
+
+  // JSON文字列値の中にある生の制御文字（改行など）をエスケープ
+  const sanitized = jsonStr.replace(/"((?:[^"\\]|\\.)*)"/gs, (_m, inner: string) => {
+    return '"' + inner
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+      .replace(/\t/g, '\\t')
+      + '"'
+  })
+
+  try {
+    return JSON.parse(sanitized) as T
+  } catch (e) {
+    throw new GeminiError(`JSON解析失敗: ${(e as Error).message}\n---応答内容---\n${text.slice(0, 300)}`)
   }
-  throw new GeminiError('AIからの応答をJSONとして解析できませんでした')
 }
 
 // ─── プロンプト構築 ────────────────────────────────────────────
@@ -114,22 +128,33 @@ function buildSystemPrompt(
   preferences: MealPreference[],
   recentPlans: MealPlan[],
   recipes: MealRecipe[],
+  requiredRecipes: MealRecipe[],
 ): string {
+  const requiredText = requiredRecipes.length > 0
+    ? `\n【必ず含めるレシピ（AIが日付を割り当てる）】${requiredRecipes.map(r => r.name).join('、')}`
+    : ''
+
   return `献立提案AI。ShotaとMiyu夫婦の昼食・夕食を提案する。
 
 ${buildPreferencesText(preferences)}
 
-【参考レシピ】${buildRecipesText(recipes)}
+【参考レシピ】${buildRecipesText(recipes)}${requiredText}
 
 【直近の献立（重複禁止）】${buildRecentPlansText(recentPlans)}
 
-ルール:
+食材ルール:
+- 必ず一般的なスーパーマーケットで購入できる食材のみ使用すること
+- 特殊な輸入食材・専門店食材は使わない
+
+献立ルール:
 - 苦手食材NG、直近と重複NG
-- 好物は全体の30%以下を目安にし、残りはバリエーション豊富な料理を提案する（好物ばかりにしない）
-- ジャンル（和食・洋食・中華・アジア）をバランスよくばらけさせる
-- 【夕食 dinner】必ず主菜（肉・魚・卵など）を1品含めること。さらにもう1品（副菜またはスープ）を推奨する
-- 【昼食 lunch】パスタ・丼もの・炒飯・麺類など10〜20分で作れる簡単な一品料理。副菜は不要
-- 各料理に詳細な調理手順（steps）を必ず記載する
+- 好物は全体の30%以下を目安とし、ジャンルをバランスよくバラけさせる
+- 【夕食 dinner】1日につき以下の3品を必ず提案する:
+  1. dish_role="main": 主食・主菜セット（例: 白米＋鶏の唐揚げ）
+  2. dish_role="side": 副菜（例: ほうれん草のごま和え）
+  3. dish_role="soup": 汁物（例: 豚汁）
+- 【昼食 lunch】1日につき1品(dish_role="single")。パスタ・丼・炒飯・麺類など10〜20分の簡単一品
+- 各料理の調理手順（steps）を詳しく記載する
 必ず下記JSON形式のみで回答。
 \`\`\`json
 {
@@ -138,18 +163,16 @@ ${buildPreferencesText(preferences)}
     {
       "date": "YYYY-MM-DD",
       "meal_type": "dinner または lunch",
+      "dish_role": "main または side または soup または single",
       "dish_name": "料理名",
       "genre": "和食",
       "type": "主菜",
       "ingredients": "食材（カンマ区切り）",
-      "steps": "1. 〜\n2. 〜\n3. 〜",
+      "steps": "1. ～\\n2. ～",
       "duration_min": 30,
       "difficulty": 2,
       "note": "ポイント"
     }
-  ],
-  "shopping_list": [
-    { "item": "食材名", "amount": "量", "category": "カテゴリ" }
   ]
 }
 \`\`\``
@@ -162,6 +185,7 @@ export interface GenerateProposalParams {
   startDate: string
   theme: string
   ingredients: string
+  requiredRecipes: MealRecipe[]   // 必ず使うレシピ
   preferences: MealPreference[]
   recentPlans: MealPlan[]
   recipes: MealRecipe[]
@@ -173,7 +197,7 @@ export async function generateMealProposal(
   apiKey: string,
   params: GenerateProposalParams,
 ): Promise<AiProposal> {
-  const systemPrompt = buildSystemPrompt(params.preferences, params.recentPlans, params.recipes)
+  const systemPrompt = buildSystemPrompt(params.preferences, params.recentPlans, params.recipes, params.requiredRecipes)
   const userMessage = `以下の条件で献立を提案してください。
 日数: ${params.days}日分
 開始日: ${params.startDate}
@@ -188,7 +212,10 @@ export async function generateMealProposal(
     ],
     params.modelName,
   )
-  return extractJson<AiProposal>(text)
+  const result = extractJson<AiProposal>(text)
+  // _localId付与（フロント側の変更/削除管理用）
+  result.meals = result.meals.map((m, i) => ({ ...m, _localId: `${m.date}-${m.meal_type}-${m.dish_role}-${i}` }))
+  return result
 }
 
 /** 会話履歴を継続して提案を修正する */
@@ -196,11 +223,10 @@ export async function continueMealChat(
   apiKey: string,
   history: ChatMessage[],
   userMessage: string,
-  params: Pick<GenerateProposalParams, 'preferences' | 'recentPlans' | 'recipes' | 'modelName'>,
+  params: Pick<GenerateProposalParams, 'preferences' | 'recentPlans' | 'recipes' | 'requiredRecipes' | 'modelName'>,
 ): Promise<AiProposal> {
-  const systemPrompt = buildSystemPrompt(params.preferences, params.recentPlans, params.recipes)
+  const systemPrompt = buildSystemPrompt(params.preferences, params.recentPlans, params.recipes, params.requiredRecipes)
 
-  // ChatMessage の role: 'model' を Groq の 'assistant' にマッピング
   const messages: GroqMessage[] = [
     { role: 'system', content: systemPrompt },
     ...history.map(msg => ({
@@ -211,7 +237,46 @@ export async function continueMealChat(
   ]
 
   const text = await callGroq(apiKey, messages, params.modelName)
-  return extractJson<AiProposal>(text)
+  const result = extractJson<AiProposal>(text)
+  result.meals = result.meals.map((m, i) => ({ ...m, _localId: `${m.date}-${m.meal_type}-${m.dish_role}-${i}` }))
+  return result
+}
+
+/** 確定した献立から買い物リストをAI生成する */
+export async function generateShoppingList(
+  apiKey: string,
+  meals: AiProposedMeal[],
+  modelName?: string | null,
+): Promise<ShoppingItem[]> {
+  const mealText = meals.map(m =>
+    `・${m.dish_name}（材料: ${m.ingredients || '不明'}）`
+  ).join('\n')
+
+  const text = await callGroq(
+    apiKey,
+    [
+      {
+        role: 'system',
+        content: '料理レシピから買い物リストを生成するアシスタントです。重複食材をまとめ、カテゴリ分けしてJSON形式のみで返してください。',
+      },
+      {
+        role: 'user',
+        content: `以下の料理を作るための買い物リストを生成してください。食材を重複なくまとめ、スーパーで買えるものだけにしてください。\n\n${mealText}\n\n必ず以下のJSON形式のみで回答してください:\n\`\`\`json\n[\n  { "item": "食材名", "amount": "量", "category": "肉類 or 魚介類 or 野菜 or 穀物・缶詰 or 調味料 or 乳製品・卵 or その他" }\n]\n\`\`\``,
+      },
+    ],
+    modelName,
+  )
+
+  // レスポンスは配列JSONなので対応
+  const sanitized = text.match(/```json\s*([\s\S]*?)```/) 
+    ? text.match(/```json\s*([\s\S]*?)```/)![1].trim()
+    : text.slice(text.indexOf('['), text.lastIndexOf(']') + 1)
+  
+  try {
+    return JSON.parse(sanitized) as ShoppingItem[]
+  } catch {
+    return []
+  }
 }
 
 export interface ImportedRecipe {
