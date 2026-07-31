@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import type { DeductItem } from '@/types'
+import { calculateTransfer, type TransferCalcResult } from './transferCalc'
 
 // ─── ローカル型定義 ───────────────────────────────────
 interface OtherItem { desc: string; amount: string }
@@ -20,15 +20,8 @@ interface FormState {
   salaryMiyu: string
   currentBalance: string
 }
-interface CalcResult {
-  topUp: number; target: number; currentBal: number
-  salaryShota: number; salaryMiyu: number
-  shotaDeduct: number; miyuDeduct: number
-  shotaDeductItems: DeductItem[]; miyuDeductItems: DeductItem[]
-  netShota: number; netMiyu: number
-  ratioShota: number; ratioMiyu: number
-  transShota: number; transMiyu: number
-}
+// 計算結果の型は transferCalc.ts に集約（保護対象ロジックの単一の出所）
+type CalcResult = TransferCalcResult
 
 // ─── ヘルパー ─────────────────────────────────────────
 const getCurrentMonth = () => {
@@ -127,22 +120,7 @@ export default function CalculatePage() {
     setSettingsSaving(false)
   }
 
-  // ─── 控除計算 ───────────────────────────────────────
-  const calcDeductDetail = (person: 'shota' | 'miyu') => {
-    const p = settings[person]
-    const items: DeductItem[] = []
-    if (p.rentCheck) { const a = Number(p.rent) || 0; if (a) items.push({ label: '家賃補助', amount: a }) }
-    if (p.transCheck) { const a = Number(p.trans) || 0; if (a) items.push({ label: '交通費', amount: a }) }
-    if (p.otherCheck) {
-      p.others.forEach(o => {
-        const a = Number(o.amount) || 0
-        if (a) items.push({ label: o.desc || 'その他', amount: a })
-      })
-    }
-    return { total: items.reduce((s, i) => s + i.amount, 0), items }
-  }
-
-  // ─── 計算実行 ───────────────────────────────────────
+  // ─── 計算実行（数式は transferCalc.ts に集約・テストで凍結） ─────
   const calculate = () => {
     const target = Number(settings.targetBalance)
     const salaryShota = Number(form.salaryShota)
@@ -153,30 +131,22 @@ export default function CalculatePage() {
     if (!salaryShota || !salaryMiyu) { showToast('二人の給料を入力してください'); return }
     if (!form.month) { showToast('対象年月を選択してください'); return }
 
-    const shotaDetail = calcDeductDetail('shota')
-    const miyuDetail = calcDeductDetail('miyu')
-    const netShota = salaryShota - shotaDetail.total
-    const netMiyu = salaryMiyu - miyuDetail.total
-
-    if (netShota <= 0 || netMiyu <= 0) { showToast('控除後の給料が0以下になっています'); return }
-
-    const total = netShota + netMiyu
-    const ratioShota = netShota / total
-    const ratioMiyu = netMiyu / total
-    const topUp = target - currentBal
-
-    if (topUp <= 0) { showToast(`口座残高が目標を ${fmt(-topUp)} 円上回っています — 振込不要`); return }
-
-    const transShota = Math.round(topUp * ratioShota)
-    const transMiyu = topUp - transShota
-
-    setResult({
-      topUp, target, currentBal,
-      salaryShota, salaryMiyu,
-      shotaDeduct: shotaDetail.total, miyuDeduct: miyuDetail.total,
-      shotaDeductItems: shotaDetail.items, miyuDeductItems: miyuDetail.items,
-      netShota, netMiyu, ratioShota, ratioMiyu, transShota, transMiyu,
+    const outcome = calculateTransfer({
+      targetBalance: target,
+      currentBalance: currentBal,
+      salaryShota,
+      salaryMiyu,
+      shota: settings.shota,
+      miyu: settings.miyu,
     })
+
+    if (!outcome.ok) {
+      if (outcome.reason === 'nonPositiveNet') { showToast('控除後の給料が0以下になっています'); return }
+      showToast(`口座残高が目標を ${fmt(outcome.overage)} 円上回っています — 振込不要`)
+      return
+    }
+
+    setResult(outcome.result)
   }
 
   // ─── 確定・保存 ─────────────────────────────────────

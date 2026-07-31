@@ -14,12 +14,8 @@ export default function DataPage() {
   const [loading, setLoading] = useState(true)
   const [detailRecord, setDetailRecord] = useState<AccountRecord | null>(null)
 
-  useEffect(() => {
-    void loadRecords()
-  }, [])
-
   const loadRecords = async () => {
-    setLoading(true)
+    // loading は初期値 true。この関数はマウント時のみ呼ばれるため冒頭の setLoading(true) は不要。
     const { data } = await supabase
       .from('account_records')
       .select('*')
@@ -27,6 +23,12 @@ export default function DataPage() {
     if (data) setRecords(data as AccountRecord[])
     setLoading(false)
   }
+
+  useEffect(() => {
+    // マウント時に一度だけ取得する意図的なパターン（レンダーループではない）
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadRecords()
+  }, [])
 
   const deleteRecord = async (id: string, month: string) => {
     if (!window.confirm(`${fmtMonth(month)} のデータを削除しますか？`)) return

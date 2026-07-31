@@ -1,0 +1,30 @@
+# ============================================================================
+# docker-compose.dev.yml ── Web(Vite) 開発サーバのコンテナ実行（任意・便利用）
+#
+# Supabase の Local スタック（Postgres/Auth/Storage/Studio）は Supabase CLI が
+# 独自のDockerで管理する（`supabase start`）。本composeは「Webフロントの開発サーバ」
+# だけをコンテナ化する薄い構成。
+#
+#   1) 別ターミナルで:  supabase start
+#   2) `supabase status` の API URL / anon key を .env.local に記入
+#   3) docker compose -f docker-compose.dev.yml up
+#
+# ⚠ 本ファイルは検証前のscaffold。各自環境で疎通確認のうえ調整すること
+#   （node のバージョン、host からの Supabase 到達性など）。
+# ============================================================================
+services:
+  web:
+    image: node:22-bookworm-slim
+    working_dir: /app
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
+    ports:
+      - "5173:5173"
+    environment:
+      # コンテナから host 上の supabase local(54321) へ到達させる
+      VITE_SUPABASE_URL: "http://host.docker.internal:54321"
+      VITE_SUPABASE_ANON_KEY: "${VITE_SUPABASE_ANON_KEY}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - .:/app
+      - /app/node_modules
