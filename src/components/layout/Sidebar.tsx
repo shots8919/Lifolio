@@ -108,6 +108,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
               <NavLink to="/account/data" className={subLinkClass} onClick={onClose}>
                 データ照会
               </NavLink>
+              <NavLink to="/account/analysis" className={subLinkClass} onClick={onClose}>
+                家計分析
+              </NavLink>
             </div>
           )}
         </div>

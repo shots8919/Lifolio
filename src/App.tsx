@@ -5,6 +5,7 @@ import AppLayout from '@/components/layout/AppLayout'
 import DashboardPage from '@/pages/DashboardPage'
 import CalculatePage from '@/features/account/CalculatePage'
 import DataPage from '@/features/account/DataPage'
+import AnalysisPage from '@/features/account/AnalysisPage'
 import SettingsPage from '@/pages/SettingsPage'
 import MealPage from '@/features/meal/MealPage'
 
@@ -29,6 +30,7 @@ export default function App() {
           <Route index element={<DashboardPage />} />
           <Route path="account/calculate" element={<CalculatePage />} />
           <Route path="account/data" element={<DataPage />} />
+          <Route path="account/analysis" element={<AnalysisPage />} />
           <Route path="meal/plan" element={<MealPage />} />
           <Route path="meal/recipes" element={<MealPage />} />
           <Route path="meal/preferences" element={<MealPage />} />
