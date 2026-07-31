@@ -7,6 +7,7 @@ import {
   sameMonthLastYear,
   findByMonth,
   summarize,
+  buildAiSummaryInput,
 } from './financeAnalytics'
 
 // account_records の最小ファクトリ（分析に使う数値のみ指定、他は既定）
@@ -115,5 +116,28 @@ describe('summarize', () => {
   it('空データでも安全（latest/prev/yoy は null）', () => {
     const s = summarize([])
     expect(s).toEqual({ count: 0, latest: null, prevPoint: null, yoyPoint: null, totalTransferred: 0, avgSalaryTotal: 0 })
+  })
+})
+
+describe('buildAiSummaryInput', () => {
+  it('最新月・前月・前年・直近系列を含む入力を作る', () => {
+    const input = buildAiSummaryInput([
+      rec({ month: '2025-03', salary_shota: 100000, salary_miyu: 100000, trans_shota: 10000, trans_miyu: 10000, target_balance: 100000, current_balance: 50000 }),
+      rec({ month: '2026-02', salary_shota: 300000, salary_miyu: 200000, trans_shota: 30000, trans_miyu: 20000 }),
+      rec({ month: '2026-03', salary_shota: 320000, salary_miyu: 210000, trans_shota: 35000, trans_miyu: 25000, target_balance: 120000, current_balance: 90000 }),
+    ])
+    expect(input).not.toBeNull()
+    expect(input!.latestMonth).toBe('2026-03')
+    expect(input!.count).toBe(3)
+    expect(input!.latest.salaryTotal).toBe(530000)
+    expect(input!.latest.achievementPct).toBe(75) // 90000/120000
+    expect(input!.prev?.salaryTotal).toBe(500000)
+    expect(input!.yoy).not.toBeNull() // 2025-03 が前年同月として存在
+    expect(input!.recent).toHaveLength(3)
+    expect(input!.recent[input!.recent.length - 1].month).toBe('2026-03')
+  })
+
+  it('データが無ければ null', () => {
+    expect(buildAiSummaryInput([])).toBeNull()
   })
 })

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { AccountRecord } from '@/types'
-import { toMonthlySeries, summarize, delta, type Delta, type MonthlyPoint } from './financeAnalytics'
+import { toMonthlySeries, summarize, delta, buildAiSummaryInput, type Delta, type MonthlyPoint } from './financeAnalytics'
 import { GroupedBarChart, LineChart, type ChartSeries } from './analytics/MiniCharts'
 
 // ─── フォーマッタ ───────────────────────────────────────────────
@@ -58,6 +58,7 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
 export default function AnalysisPage() {
   const [records, setRecords] = useState<AccountRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [ai, setAi] = useState<{ status: 'idle' | 'loading' | 'done' | 'error'; text: string }>({ status: 'idle', text: '' })
 
   useEffect(() => {
     void (async () => {
@@ -66,6 +67,20 @@ export default function AnalysisPage() {
       setLoading(false)
     })()
   }, [])
+
+  // AI要約: 集計値のみを Edge Function 経由で Gemini に渡す（キーはサーバ側・読取専用）
+  const requestAiSummary = async () => {
+    const input = buildAiSummaryInput(records)
+    if (!input) return
+    setAi({ status: 'loading', text: '' })
+    const { data, error } = await supabase.functions.invoke('finance-summary', { body: { input } })
+    const payload = data as { summary?: string; error?: string } | null
+    if (error || payload?.error) {
+      setAi({ status: 'error', text: payload?.error ?? error?.message ?? '呼び出しに失敗しました' })
+      return
+    }
+    setAi({ status: 'done', text: payload?.summary ?? '' })
+  }
 
   const series = toMonthlySeries(records)
   const s = summarize(records)
@@ -129,6 +144,46 @@ export default function AnalysisPage() {
             foot={<span className="text-[10px]" style={{ color: 'var(--muted)' }}>現在 {fmt(latest.currentBalance)} / 目標 {fmt(latest.targetBalance)}</span>} />
           <Kpi label="累計振込額" value={fmt(s.totalTransferred)}
             foot={<span className="text-[10px]" style={{ color: 'var(--muted)' }}>全{s.count}ヶ月 合計</span>} />
+        </div>
+      </div>
+
+      {/* AI要約（β・Edge Function 経由・読取専用） */}
+      <div className="rounded-xl" style={CARD}>
+        <div className="px-5 py-3.5 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
+          <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
+            ✨ AI要約{' '}
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full align-middle" style={{ background: 'var(--subtle)', color: 'var(--muted)' }}>β</span>
+          </span>
+          <button
+            onClick={() => void requestAiSummary()}
+            disabled={ai.status === 'loading'}
+            className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            style={{ background: 'var(--miyu)' }}
+          >
+            {ai.status === 'loading' ? '生成中...' : ai.status === 'done' ? '再生成' : 'AIに要約を依頼'}
+          </button>
+        </div>
+        <div className="p-5">
+          {ai.status === 'idle' && (
+            <p className="text-xs" style={{ color: 'var(--muted)' }}>
+              最新月の数値をAIが日本語で要約します（数値の説明のみ・助言や推測はしません）。ボタンで実行してください。
+            </p>
+          )}
+          {ai.status === 'loading' && (
+            <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--muted)' }}>
+              <span className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: 'var(--miyu)', borderTopColor: 'transparent' }} />
+              AIが要約しています...
+            </div>
+          )}
+          {ai.status === 'done' && (
+            <p className="text-sm leading-relaxed whitespace-pre-line" style={{ color: 'var(--text)' }}>{ai.text}</p>
+          )}
+          {ai.status === 'error' && (
+            <div className="text-xs rounded-lg p-3" style={{ background: 'var(--subtle)', color: 'var(--muted)' }}>
+              AI要約は現在利用できません（Edge Function 未デプロイ、または GEMINI_API_KEY 未設定）。数値・グラフは上記のとおりです。
+              <span className="block mt-1 opacity-70">詳細: {ai.text}</span>
+            </div>
+          )}
         </div>
       </div>
 

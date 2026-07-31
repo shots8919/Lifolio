@@ -114,3 +114,50 @@ export function summarize(records: AccountRecord[]): FinanceSummary {
   const avgSalaryTotal = count > 0 ? Math.round(series.reduce((s, p) => s + p.salaryTotal, 0) / count) : 0
   return { count, latest, prevPoint, yoyPoint, totalTransferred, avgSalaryTotal }
 }
+
+// ─── AI要約への入力（Edge Function に渡すJSON） ─────────────────
+// AIには「この数値の事実だけを説明」させる。生成物はサーバ(Edge Function)経由で、
+// APIキーはクライアントに露出させない。ここでは渡す数値を正規化するだけ。
+const round1 = (n: number) => Math.round(n * 10) / 10
+function pickForAi(p: MonthlyPoint) {
+  return {
+    salaryTotal: p.salaryTotal,
+    deductTotal: p.deductTotal,
+    netTotal: p.netTotal,
+    transTotal: p.transTotal,
+    targetBalance: p.targetBalance,
+    currentBalance: p.currentBalance,
+    achievementPct: round1(p.achievementPct),
+  }
+}
+export type AiMonthFigures = ReturnType<typeof pickForAi>
+
+export interface AiSummaryInput {
+  latestMonth: string
+  count: number
+  totalTransferred: number
+  avgSalaryTotal: number
+  latest: AiMonthFigures
+  prev: AiMonthFigures | null
+  yoy: AiMonthFigures | null
+  recent: { month: string; salaryTotal: number; transTotal: number; achievementPct: number }[]
+}
+
+/** account_records から AI要約用の入力を作る（データが無ければ null） */
+export function buildAiSummaryInput(records: AccountRecord[]): AiSummaryInput | null {
+  const { latest, prevPoint, yoyPoint, count, totalTransferred, avgSalaryTotal } = summarize(records)
+  if (!latest) return null
+  const series = toMonthlySeries(records)
+  return {
+    latestMonth: latest.month,
+    count,
+    totalTransferred,
+    avgSalaryTotal,
+    latest: pickForAi(latest),
+    prev: prevPoint ? pickForAi(prevPoint) : null,
+    yoy: yoyPoint ? pickForAi(yoyPoint) : null,
+    recent: series.slice(-6).map(p => ({
+      month: p.month, salaryTotal: p.salaryTotal, transTotal: p.transTotal, achievementPct: round1(p.achievementPct),
+    })),
+  }
+}
