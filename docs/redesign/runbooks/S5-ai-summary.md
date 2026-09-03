@@ -19,13 +19,18 @@
 
 ---
 
+## 状況（2026-09-03 時点）
+- コードは実装・コミット済み（`177472d`）。**Edge Function は未デプロイ**。
+  - 実測: `POST https://daxobewnunuofkxrkmri.supabase.co/functions/v1/finance-summary` → `404 NOT_FOUND`
+- 分析ページ自体は未デプロイでも動作する（AI要約カードがエラー表示になるだけ）。
+
 ## 前提
-- Supabase CLI（未導入なら）:
+- Supabase CLI: 導入済み（v2.116.0 / `~/.local/bin/supabase`）。手順は `S1-environments.md §1`。
   ```bash
-  # 公式のインストール手順（npm -g は非推奨）。例（Linux, tarball）:
-  # https://supabase.com/docs/guides/cli
+  export PATH="$HOME/.local/bin:$PATH"   # 次回ログイン以降は ~/.profile が自動で通す
   supabase --version
   ```
+- **Docker は不要**（`--use-api` でサーバ側バンドル）。
 - Gemini APIキー（無料）: Google AI Studio で取得 → https://aistudio.google.com/app/apikey
 
 ---
@@ -42,9 +47,12 @@ supabase link --project-ref daxobewnunuofkxrkmri
  supabase secrets set GEMINI_API_KEY='＜Google AI StudioのAPIキー＞'
 #   任意でモデル変更: supabase secrets set GEMINI_MODEL='gemini-2.0-flash'
 
-# 3) 関数をデプロイ
-supabase functions deploy finance-summary
+# 3) 関数をデプロイ（--use-api で Docker 不要）
+supabase functions deploy finance-summary --use-api
 ```
+
+> ⚠ APIキー・アクセストークンは**チャットや共有ドキュメントに貼らない**こと。
+> `supabase secrets set` はコマンド先頭にスペースを入れてシェル履歴に残さない。
 
 > `supabase functions deploy` は Edge Function（サーバレス）を追加するだけで、
 > テーブルやRLSなどDBには一切変更を加えない。無料枠内で動作。
@@ -73,7 +81,7 @@ curl -i -X POST \
 - キーは Secret 管理でクライアント非露出（現行のクライアント側AIキー方式=R4 とは別の安全な方式。将来 S3 で献立AIも同方式へ寄せる）。
 
 ## 完了条件
-- [ ] `supabase functions deploy finance-summary` 成功
+- [ ] `supabase functions deploy finance-summary --use-api` 成功
 - [ ] `GEMINI_API_KEY` を Secret 設定
 - [ ] 分析ページの「AIに要約を依頼」で要約が表示される
 - [ ] 本番DB（テーブル/RLS/データ）は無変更のまま

@@ -32,26 +32,42 @@ docker-compose.dev.yml              # Web開発サーバのコンテナ実行（
 
 ---
 
-## セットアップ手順（Ubuntu 22.04）
+## セットアップ手順（WSL2 / Ubuntu 22.04）
 
-### 1. Supabase CLI と Docker
+### 1. Supabase CLI ── ✅ 実施済み（2026-09-03 / v2.116.0）
+`npm i -g supabase` は現在サポート外。公式リリースの tarball を**ユーザー領域**へ展開する（sudo不要）。
+
 ```bash
-# Docker（未導入なら）
-# https://docs.docker.com/engine/install/ubuntu/
-
-# Supabase CLI
-npm i -g supabase   # もしくは公式バイナリ
+ver=$(curl -s https://api.github.com/repos/supabase/cli/releases/latest \
+  | python3 -c "import json,sys;print(json.load(sys.stdin)['tag_name'])")
+curl -sL -o /tmp/supabase.tar.gz \
+  "https://github.com/supabase/cli/releases/download/${ver}/supabase_linux_amd64.tar.gz"
+mkdir -p ~/.local/bin && tar xzf /tmp/supabase.tar.gz -C ~/.local/bin supabase
 supabase --version
 ```
+> `~/.profile` が `~/.local/bin` を PATH に追加する（**次回ログインから**有効）。
+> 同じセッションで使うなら `export PATH="$HOME/.local/bin:$PATH"`。
 
-### 2. プロジェクト初期化（config.toml を生成）
+### 2. Docker ── ⏳ 未実施（`supabase start` に必須）
+この環境は **WSL2 / Ubuntu 22.04、sudoはパスワード必要、Docker Desktop 未導入**。
+採用方針は **Docker Desktop for Windows + WSL統合**（WSL内でのsudo作業が不要になるため）。
+
+1. Windows側で Docker Desktop を導入 → https://docs.docker.com/desktop/setup/install/windows-install/
+2. Docker Desktop → **Settings → Resources → WSL integration** → 使用中のディストリを ON
+3. WSLのターミナルを開き直して確認: `docker --version` と `docker ps`
+
+> ⚠ `supabase functions deploy` は **Docker不要**（`--use-api` を付ける）。
+> Dockerが必要なのは `supabase start` / `supabase db reset` などローカルスタック系のみ。
+
+### 3. プロジェクト初期化 ── ✅ 実施済み（2026-09-03 / commit `9e01784`）
 ```bash
 # リポジトリ直下で
 supabase init      # supabase/config.toml を生成（既存の migrations/seed はそのまま使われる）
 ```
-> `supabase init` は `supabase/` にファイルがあっても migrations/seed を上書きしない。
+- 生成物: `supabase/config.toml`（`project_id="Lifolio"` / `db.major_version=17` ＝ 本番 PostgreSQL 17.6 と一致）、`supabase/.gitignore`
+- 既存の `migrations/` `seed.sql` `functions/` は無変更であることを確認済み。
 
-### 3. ローカルスタック起動
+### 4. ローカルスタック起動
 ```bash
 supabase start     # 初回はイメージDL。完了後 URL/anon key/service_role key を表示
 supabase status    # 値を後から確認
@@ -62,12 +78,12 @@ cp .env.example .env.local
 # VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY を supabase status の値に更新
 ```
 
-### 4. スキーマ+seed をローカルDBへ適用
+### 5. スキーマ+seed をローカルDBへ適用
 ```bash
 supabase db reset  # migrations/0001 を流し、seed.sql を投入（Localのみ・破壊的）
 ```
 
-### 5. Web を起動して疎通確認
+### 6. Web を起動して疎通確認
 ```bash
 # ネイティブ:
 npm install && npm run dev
@@ -93,6 +109,9 @@ supabase db push        # ⚠ 事前にS0バックアップ・変更内容レビ
 ---
 
 ## 完了条件（Doneの定義）
+- [x] Supabase CLI を導入した（v2.116.0 / `~/.local/bin`）
+- [x] `supabase init` で `config.toml` を生成しコミットした
+- [ ] Docker Desktop を導入し WSL統合を有効化した（`docker ps` が通る）
 - [ ] `supabase start` でローカルスタックが起動する
 - [ ] `supabase db reset` で 0001 マイグレーション + seed が適用される
 - [ ] `.env.local` 経由で Web がローカルSupabaseに接続し、`dev/dev1234` でログインできる
